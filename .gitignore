@@ -12,7 +12,9 @@ release/
 *.iml
 
 # Environment and config
-.env*
+.env
+.env.*
+!.envrc
 *.local
 
 # Logs
