@@ -1,6 +1,7 @@
 //! CLI command implementations.
 
 mod check;
+mod clear;
 mod diff;
 mod edit;
 mod init;
@@ -24,6 +25,7 @@ use crate::Cli;
 use crate::output::OutputConfig;
 
 use self::check::CheckArgs;
+use self::clear::ClearArgs;
 use self::diff::DiffArgs;
 use self::edit::EditArgs;
 use self::init::InitArgs;
@@ -79,6 +81,9 @@ impl CommandContext {
 pub enum Commands {
     /// Parse documents, build knowledge graph, and validate integrity
     Check(CheckArgs),
+
+    /// Clear a suspect link by re-stamping a single target
+    Clear(ClearArgs),
 
     /// Compare graphs between Git references
     Diff(DiffArgs),
@@ -145,6 +150,7 @@ pub fn run(cli: &Cli, file_config: Option<&Config>) -> Result<ExitCode, Box<dyn 
 
     match &cli.command {
         Commands::Check(args) => check::run(args, &ctx),
+        Commands::Clear(args) => clear::run(args, &ctx),
         Commands::Diff(args) => diff::run(args, &ctx),
         Commands::Edit(args) => edit::run(args, &ctx),
         Commands::Init(args) => init::run(args, &ctx),

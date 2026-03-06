@@ -825,6 +825,20 @@ mod global_options {
     }
 }
 
+mod clear_command {
+    use super::*;
+
+    #[test]
+    fn test_clear_help() {
+        sara()
+            .arg("clear")
+            .arg("--help")
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Clear a suspect link"));
+    }
+}
+
 mod review_command {
     use super::*;
 
