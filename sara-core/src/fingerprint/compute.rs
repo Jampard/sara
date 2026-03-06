@@ -42,7 +42,12 @@ pub fn compute_fingerprint(
 pub fn compute_item_fingerprint(item: &Item) -> String {
     let body = item.body_hash.as_deref().unwrap_or("");
     let type_fields = collect_type_fields(item);
-    compute_fingerprint(item.id.as_str(), body, item.outcome.as_deref(), &type_fields)
+    compute_fingerprint(
+        item.id.as_str(),
+        body,
+        item.outcome.as_deref(),
+        &type_fields,
+    )
 }
 
 /// Returns the type-specific field names that contribute to fingerprinting.

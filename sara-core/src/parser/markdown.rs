@@ -295,7 +295,10 @@ pub fn parse_markdown_file(
             );
         }
         // Investigation types — type-specific attribute fields
-        ItemType::Entity | ItemType::Thesis | ItemType::Premise | ItemType::Question
+        ItemType::Entity
+        | ItemType::Thesis
+        | ItemType::Premise
+        | ItemType::Question
         | ItemType::Block => {}
         ItemType::Evidence => {
             if let Some(ref s) = frontmatter.sourcing {

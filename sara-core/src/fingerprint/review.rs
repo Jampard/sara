@@ -13,8 +13,8 @@ pub fn apply_review(
     reviewed: &str,
     stamps: &[(String, String)],
 ) -> Result<String, String> {
-    let extracted = extract_frontmatter(content, std::path::Path::new("review"))
-        .map_err(|e| e.to_string())?;
+    let extracted =
+        extract_frontmatter(content, std::path::Path::new("review")).map_err(|e| e.to_string())?;
 
     let mut yaml: Value =
         serde_yaml::from_str(&extracted.yaml).map_err(|e| format!("YAML parse error: {e}"))?;
@@ -44,7 +44,8 @@ pub fn apply_review(
         );
     }
 
-    let new_yaml = serde_yaml::to_string(&yaml).map_err(|e| format!("YAML serialize error: {e}"))?;
+    let new_yaml =
+        serde_yaml::to_string(&yaml).map_err(|e| format!("YAML serialize error: {e}"))?;
     Ok(update_frontmatter(content, &new_yaml))
 }
 
@@ -52,13 +53,9 @@ pub fn apply_review(
 ///
 /// Parses existing YAML frontmatter, updates the stamp for the given target ID,
 /// then reconstructs the file with the updated frontmatter.
-pub fn apply_stamp(
-    content: &str,
-    target_id: &str,
-    stamp: &str,
-) -> Result<String, String> {
-    let extracted = extract_frontmatter(content, std::path::Path::new("clear"))
-        .map_err(|e| e.to_string())?;
+pub fn apply_stamp(content: &str, target_id: &str, stamp: &str) -> Result<String, String> {
+    let extracted =
+        extract_frontmatter(content, std::path::Path::new("clear")).map_err(|e| e.to_string())?;
 
     let mut yaml: Value =
         serde_yaml::from_str(&extracted.yaml).map_err(|e| format!("YAML parse error: {e}"))?;
@@ -81,7 +78,8 @@ pub fn apply_stamp(
         Value::String(stamp.to_string()),
     );
 
-    let new_yaml = serde_yaml::to_string(&yaml).map_err(|e| format!("YAML serialize error: {e}"))?;
+    let new_yaml =
+        serde_yaml::to_string(&yaml).map_err(|e| format!("YAML serialize error: {e}"))?;
     Ok(update_frontmatter(content, &new_yaml))
 }
 
@@ -92,8 +90,12 @@ mod tests {
     #[test]
     fn test_apply_review_adds_reviewed_and_stamps() {
         let content = "---\nid: \"EVD-001\"\ntype: evidence\nname: \"Test\"\n---\nBody text.\n";
-        let result =
-            apply_review(content, "abcd1234", &[("ITM-001".into(), "ef567890".into())]).unwrap();
+        let result = apply_review(
+            content,
+            "abcd1234",
+            &[("ITM-001".into(), "ef567890".into())],
+        )
+        .unwrap();
 
         assert!(result.contains("reviewed:"));
         assert!(result.contains("abcd1234"));

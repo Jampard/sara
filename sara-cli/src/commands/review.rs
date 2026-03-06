@@ -25,9 +25,7 @@ pub struct ReviewArgs {
 pub fn run(args: &ReviewArgs, ctx: &CommandContext) -> Result<ExitCode, Box<dyn Error>> {
     let items = ctx.parse_items(None)?;
 
-    let graph = KnowledgeGraphBuilder::new()
-        .add_items(items)
-        .build()?;
+    let graph = KnowledgeGraphBuilder::new().add_items(items).build()?;
 
     let item_id = ItemId::new_unchecked(&args.item_id);
     let Some(item) = graph.get(&item_id) else {

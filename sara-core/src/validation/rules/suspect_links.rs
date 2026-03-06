@@ -10,11 +10,7 @@ use crate::validation::rule::{Severity, ValidationRule};
 pub struct SuspectLinksRule;
 
 impl ValidationRule for SuspectLinksRule {
-    fn validate(
-        &self,
-        graph: &KnowledgeGraph,
-        _config: &ValidationConfig,
-    ) -> Vec<ValidationError> {
+    fn validate(&self, graph: &KnowledgeGraph, _config: &ValidationConfig) -> Vec<ValidationError> {
         let mut errors = Vec::new();
 
         for item in graph.items() {
@@ -72,10 +68,8 @@ mod tests {
         let entity = create_test_item("ITM-001", ItemType::Entity);
         let entity_fp = compute_item_fingerprint(&entity);
 
-        let source = crate::model::SourceLocation::new(
-            PathBuf::from("/test"),
-            "EVD-001.md".to_string(),
-        );
+        let source =
+            crate::model::SourceLocation::new(PathBuf::from("/test"), "EVD-001.md".to_string());
         let evidence = crate::model::ItemBuilder::new()
             .id(ItemId::new_unchecked("EVD-001"))
             .item_type(ItemType::Evidence)
@@ -132,10 +126,8 @@ mod tests {
     fn test_suspect_link_when_stamp_stale() {
         let entity = create_test_item("ITM-001", ItemType::Entity);
 
-        let source = crate::model::SourceLocation::new(
-            PathBuf::from("/test"),
-            "EVD-001.md".to_string(),
-        );
+        let source =
+            crate::model::SourceLocation::new(PathBuf::from("/test"), "EVD-001.md".to_string());
         let evidence = crate::model::ItemBuilder::new()
             .id(ItemId::new_unchecked("EVD-001"))
             .item_type(ItemType::Evidence)
