@@ -7,6 +7,7 @@ mod init;
 mod interactive;
 mod query;
 mod report;
+mod review;
 
 use std::env;
 use std::error::Error;
@@ -28,6 +29,7 @@ use self::edit::EditArgs;
 use self::init::InitArgs;
 use self::query::QueryArgs;
 use self::report::ReportArgs;
+use self::review::ReviewArgs;
 
 /// Shared context for command execution.
 #[derive(Debug, Clone)]
@@ -111,6 +113,9 @@ pub enum Commands {
 
     /// Generate coverage and traceability reports
     Report(ReportArgs),
+
+    /// Mark an item as reviewed and re-stamp outgoing links
+    Review(ReviewArgs),
 }
 
 /// Returns repositories: CLI args take precedence, then config file, then current directory.
@@ -145,5 +150,6 @@ pub fn run(cli: &Cli, file_config: Option<&Config>) -> Result<ExitCode, Box<dyn 
         Commands::Init(args) => init::run(args, &ctx),
         Commands::Query(args) => query::run(args, &ctx),
         Commands::Report(args) => report::run(args, &ctx),
+        Commands::Review(args) => review::run(args, &ctx),
     }
 }

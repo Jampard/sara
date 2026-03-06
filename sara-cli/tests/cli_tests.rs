@@ -824,3 +824,30 @@ mod global_options {
             .success();
     }
 }
+
+mod review_command {
+    use super::*;
+
+    #[test]
+    fn test_review_help() {
+        sara()
+            .arg("review")
+            .arg("--help")
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Mark an item as reviewed"));
+    }
+
+    #[test]
+    fn test_review_nonexistent_item() {
+        let fixtures = fixtures_path().join("investigation");
+
+        sara()
+            .arg("review")
+            .arg("-r")
+            .arg(&fixtures)
+            .arg("NONEXISTENT-001")
+            .assert()
+            .failure();
+    }
+}
