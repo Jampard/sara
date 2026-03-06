@@ -20,6 +20,16 @@ pub enum ItemType {
     HardwareDetailedDesign,
     SoftwareDetailedDesign,
     ArchitectureDecisionRecord,
+
+    // Investigation types
+    Entity,
+    Evidence,
+    Thesis,
+    Hypothesis,
+    Analysis,
+    Premise,
+    Question,
+    Block,
 }
 
 /// ADR lifecycle status.
@@ -92,6 +102,14 @@ impl ItemType {
             Self::HardwareDetailedDesign,
             Self::SoftwareDetailedDesign,
             Self::ArchitectureDecisionRecord,
+            Self::Entity,
+            Self::Evidence,
+            Self::Thesis,
+            Self::Hypothesis,
+            Self::Analysis,
+            Self::Premise,
+            Self::Question,
+            Self::Block,
         ]
     }
 
@@ -109,6 +127,14 @@ impl ItemType {
             Self::HardwareDetailedDesign => "Hardware Detailed Design",
             Self::SoftwareDetailedDesign => "Software Detailed Design",
             Self::ArchitectureDecisionRecord => "Architecture Decision Record",
+            Self::Entity => "Entity",
+            Self::Evidence => "Evidence",
+            Self::Thesis => "Thesis",
+            Self::Hypothesis => "Hypothesis",
+            Self::Analysis => "Analysis",
+            Self::Premise => "Premise",
+            Self::Question => "Question",
+            Self::Block => "Block",
         }
     }
 
@@ -126,6 +152,14 @@ impl ItemType {
             Self::HardwareDetailedDesign => "HWDD",
             Self::SoftwareDetailedDesign => "SWDD",
             Self::ArchitectureDecisionRecord => "ADR",
+            Self::Entity => "ITM",
+            Self::Evidence => "EVD",
+            Self::Thesis => "THS",
+            Self::Hypothesis => "HYP",
+            Self::Analysis => "ANL",
+            Self::Premise => "PRM",
+            Self::Question => "QST",
+            Self::Block => "BLK",
         }
     }
 
@@ -220,7 +254,10 @@ impl ItemType {
     /// Returns true if this is a root item type (Solution).
     #[must_use]
     pub const fn is_root(&self) -> bool {
-        matches!(self, Self::Solution)
+        matches!(
+            self,
+            Self::Solution | Self::Entity | Self::Thesis | Self::Block
+        )
     }
 
     /// Returns true if this is an Architecture Decision Record type.
@@ -256,6 +293,15 @@ impl ItemType {
             Self::HardwareDetailedDesign => Some(Self::HardwareRequirement),
             Self::SoftwareDetailedDesign => Some(Self::SoftwareRequirement),
             Self::ArchitectureDecisionRecord => None,
+            // Investigation types: None because parent relations target multiple types
+            Self::Entity
+            | Self::Evidence
+            | Self::Thesis
+            | Self::Hypothesis
+            | Self::Analysis
+            | Self::Premise
+            | Self::Question
+            | Self::Block => None,
         }
     }
 
@@ -272,6 +318,12 @@ impl ItemType {
             | Self::HardwareDetailedDesign
             | Self::SoftwareDetailedDesign => Some(FieldName::Satisfies),
             Self::ArchitectureDecisionRecord => Some(FieldName::Justifies),
+            // Investigation types
+            Self::Entity | Self::Thesis | Self::Block => None,
+            Self::Evidence | Self::Hypothesis | Self::Analysis | Self::Question => {
+                Some(FieldName::Parent)
+            }
+            Self::Premise => Some(FieldName::EstablishedBy),
         }
     }
 
@@ -289,6 +341,14 @@ impl ItemType {
             Self::HardwareDetailedDesign => "hardware_detailed_design",
             Self::SoftwareDetailedDesign => "software_detailed_design",
             Self::ArchitectureDecisionRecord => "architecture_decision_record",
+            Self::Entity => "entity",
+            Self::Evidence => "evidence",
+            Self::Thesis => "thesis",
+            Self::Hypothesis => "hypothesis",
+            Self::Analysis => "analysis",
+            Self::Premise => "premise",
+            Self::Question => "question",
+            Self::Block => "block",
         }
     }
 
@@ -363,6 +423,68 @@ impl ItemType {
                 TraceabilityConfig {
                     relationship_field: FieldName::Justifies,
                     target_type: ItemType::HardwareDetailedDesign,
+                },
+            ],
+            // Investigation types
+            ItemType::Entity | ItemType::Thesis | ItemType::Block => vec![],
+            ItemType::Evidence => vec![
+                TraceabilityConfig {
+                    relationship_field: FieldName::Parent,
+                    target_type: ItemType::Entity,
+                },
+                TraceabilityConfig {
+                    relationship_field: FieldName::Parent,
+                    target_type: ItemType::Thesis,
+                },
+            ],
+            ItemType::Hypothesis => vec![
+                TraceabilityConfig {
+                    relationship_field: FieldName::Parent,
+                    target_type: ItemType::Entity,
+                },
+                TraceabilityConfig {
+                    relationship_field: FieldName::Parent,
+                    target_type: ItemType::Thesis,
+                },
+            ],
+            ItemType::Analysis => vec![
+                TraceabilityConfig {
+                    relationship_field: FieldName::Parent,
+                    target_type: ItemType::Entity,
+                },
+                TraceabilityConfig {
+                    relationship_field: FieldName::Parent,
+                    target_type: ItemType::Thesis,
+                },
+                TraceabilityConfig {
+                    relationship_field: FieldName::Cites,
+                    target_type: ItemType::Evidence,
+                },
+                TraceabilityConfig {
+                    relationship_field: FieldName::Evaluates,
+                    target_type: ItemType::Hypothesis,
+                },
+            ],
+            ItemType::Premise => vec![TraceabilityConfig {
+                relationship_field: FieldName::EstablishedBy,
+                target_type: ItemType::Thesis,
+            }],
+            ItemType::Question => vec![
+                TraceabilityConfig {
+                    relationship_field: FieldName::Parent,
+                    target_type: ItemType::Entity,
+                },
+                TraceabilityConfig {
+                    relationship_field: FieldName::Parent,
+                    target_type: ItemType::Thesis,
+                },
+                TraceabilityConfig {
+                    relationship_field: FieldName::RaisedBy,
+                    target_type: ItemType::Analysis,
+                },
+                TraceabilityConfig {
+                    relationship_field: FieldName::RaisedBy,
+                    target_type: ItemType::Evidence,
                 },
             ],
         }
@@ -461,6 +583,32 @@ pub struct UpstreamRefs {
     /// Design artifacts this ADR justifies (for ArchitectureDecisionRecord).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub justifies: Vec<ItemId>,
+
+    // Investigation upstream fields (author-declared)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parent: Vec<ItemId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cites: Vec<ItemId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub evaluates: Vec<ItemId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub established_by: Vec<ItemId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub raised_by: Vec<ItemId>,
+
+    // Investigation upstream fields (auto-inferred inverses of downstream)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub premise_of: Vec<ItemId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub gap_of: Vec<ItemId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hypothesis_of: Vec<ItemId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub analysis_of: Vec<ItemId>,
+
+    // Investigation peer fields
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub affects: Vec<ItemId>,
 }
 
 impl UpstreamRefs {
@@ -471,6 +619,16 @@ impl UpstreamRefs {
             .chain(self.derives_from.iter())
             .chain(self.satisfies.iter())
             .chain(self.justifies.iter())
+            .chain(self.parent.iter())
+            .chain(self.cites.iter())
+            .chain(self.evaluates.iter())
+            .chain(self.established_by.iter())
+            .chain(self.raised_by.iter())
+            .chain(self.premise_of.iter())
+            .chain(self.gap_of.iter())
+            .chain(self.hypothesis_of.iter())
+            .chain(self.analysis_of.iter())
+            .chain(self.affects.iter())
     }
 
     /// Returns true if there are no upstream references.
@@ -480,6 +638,16 @@ impl UpstreamRefs {
             && self.derives_from.is_empty()
             && self.satisfies.is_empty()
             && self.justifies.is_empty()
+            && self.parent.is_empty()
+            && self.cites.is_empty()
+            && self.evaluates.is_empty()
+            && self.established_by.is_empty()
+            && self.raised_by.is_empty()
+            && self.premise_of.is_empty()
+            && self.gap_of.is_empty()
+            && self.hypothesis_of.is_empty()
+            && self.analysis_of.is_empty()
+            && self.affects.is_empty()
     }
 }
 
@@ -501,6 +669,32 @@ pub struct DownstreamRefs {
     /// ADRs that justify this item (for design artifacts: SYSARCH, SWDD, HWDD).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub justified_by: Vec<ItemId>,
+
+    // Investigation downstream fields (auto-inferred inverses of upstream)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub children: Vec<ItemId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cited_by: Vec<ItemId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub evaluated_by: Vec<ItemId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub establishes: Vec<ItemId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub raises: Vec<ItemId>,
+
+    // Investigation downstream fields (author-declared)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub premises: Vec<ItemId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub gaps: Vec<ItemId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hypotheses: Vec<ItemId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub analyses: Vec<ItemId>,
+
+    // Investigation peer fields
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub affected_by: Vec<ItemId>,
 }
 
 impl DownstreamRefs {
@@ -511,6 +705,16 @@ impl DownstreamRefs {
             .chain(self.derives.iter())
             .chain(self.is_satisfied_by.iter())
             .chain(self.justified_by.iter())
+            .chain(self.children.iter())
+            .chain(self.cited_by.iter())
+            .chain(self.evaluated_by.iter())
+            .chain(self.establishes.iter())
+            .chain(self.raises.iter())
+            .chain(self.premises.iter())
+            .chain(self.gaps.iter())
+            .chain(self.hypotheses.iter())
+            .chain(self.analyses.iter())
+            .chain(self.affected_by.iter())
     }
 
     /// Returns true if there are no downstream references.
@@ -520,6 +724,16 @@ impl DownstreamRefs {
             && self.derives.is_empty()
             && self.is_satisfied_by.is_empty()
             && self.justified_by.is_empty()
+            && self.children.is_empty()
+            && self.cited_by.is_empty()
+            && self.evaluated_by.is_empty()
+            && self.establishes.is_empty()
+            && self.raises.is_empty()
+            && self.premises.is_empty()
+            && self.gaps.is_empty()
+            && self.hypotheses.is_empty()
+            && self.analyses.is_empty()
+            && self.affected_by.is_empty()
     }
 }
 
@@ -601,6 +815,24 @@ pub enum ItemAttributes {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         supersedes: Vec<ItemId>,
     },
+
+    // Investigation types — simple unit variants, no type-specific fields
+    #[serde(rename = "entity")]
+    Entity,
+    #[serde(rename = "evidence")]
+    Evidence,
+    #[serde(rename = "thesis")]
+    Thesis,
+    #[serde(rename = "hypothesis")]
+    Hypothesis,
+    #[serde(rename = "analysis")]
+    Analysis,
+    #[serde(rename = "premise")]
+    Premise,
+    #[serde(rename = "question")]
+    Question,
+    #[serde(rename = "block")]
+    Block,
 }
 
 impl ItemAttributes {
@@ -631,6 +863,14 @@ impl ItemAttributes {
                 deciders: Vec::new(),
                 supersedes: Vec::new(),
             },
+            ItemType::Entity => ItemAttributes::Entity,
+            ItemType::Evidence => ItemAttributes::Evidence,
+            ItemType::Thesis => ItemAttributes::Thesis,
+            ItemType::Hypothesis => ItemAttributes::Hypothesis,
+            ItemType::Analysis => ItemAttributes::Analysis,
+            ItemType::Premise => ItemAttributes::Premise,
+            ItemType::Question => ItemAttributes::Question,
+            ItemType::Block => ItemAttributes::Block,
         }
     }
 
@@ -869,7 +1109,15 @@ impl ItemBuilder {
             | ItemAttributes::UseCase
             | ItemAttributes::Scenario
             | ItemAttributes::SoftwareDetailedDesign
-            | ItemAttributes::HardwareDetailedDesign => {}
+            | ItemAttributes::HardwareDetailedDesign
+            | ItemAttributes::Entity
+            | ItemAttributes::Evidence
+            | ItemAttributes::Thesis
+            | ItemAttributes::Hypothesis
+            | ItemAttributes::Analysis
+            | ItemAttributes::Premise
+            | ItemAttributes::Question
+            | ItemAttributes::Block => {}
             ItemAttributes::SystemRequirement {
                 specification,
                 depends_on,
@@ -968,6 +1216,16 @@ impl ItemBuilder {
                     supersedes: self.supersedes.clone(),
                 })
             }
+
+            // Investigation types — no required attributes
+            ItemType::Entity => Ok(ItemAttributes::Entity),
+            ItemType::Evidence => Ok(ItemAttributes::Evidence),
+            ItemType::Thesis => Ok(ItemAttributes::Thesis),
+            ItemType::Hypothesis => Ok(ItemAttributes::Hypothesis),
+            ItemType::Analysis => Ok(ItemAttributes::Analysis),
+            ItemType::Premise => Ok(ItemAttributes::Premise),
+            ItemType::Question => Ok(ItemAttributes::Question),
+            ItemType::Block => Ok(ItemAttributes::Block),
         }
     }
 
@@ -1070,6 +1328,134 @@ mod tests {
     }
 
     #[test]
+    fn test_investigation_item_types() {
+        assert_eq!(ItemType::Entity.as_str(), "entity");
+        assert_eq!(ItemType::Entity.prefix(), "ITM");
+        assert_eq!(ItemType::Entity.display_name(), "Entity");
+        assert!(ItemType::Entity.is_root());
+
+        assert_eq!(ItemType::Evidence.as_str(), "evidence");
+        assert_eq!(ItemType::Evidence.prefix(), "EVD");
+        assert!(!ItemType::Evidence.is_root());
+
+        assert_eq!(ItemType::Thesis.as_str(), "thesis");
+        assert_eq!(ItemType::Thesis.prefix(), "THS");
+        assert!(ItemType::Thesis.is_root());
+
+        assert_eq!(ItemType::Hypothesis.as_str(), "hypothesis");
+        assert_eq!(ItemType::Hypothesis.prefix(), "HYP");
+
+        assert_eq!(ItemType::Analysis.as_str(), "analysis");
+        assert_eq!(ItemType::Analysis.prefix(), "ANL");
+
+        assert_eq!(ItemType::Premise.as_str(), "premise");
+        assert_eq!(ItemType::Premise.prefix(), "PRM");
+
+        assert_eq!(ItemType::Question.as_str(), "question");
+        assert_eq!(ItemType::Question.prefix(), "QST");
+
+        assert_eq!(ItemType::Block.as_str(), "block");
+        assert_eq!(ItemType::Block.prefix(), "BLK");
+        assert!(ItemType::Block.is_root());
+    }
+
+    #[test]
+    fn test_investigation_types_se_predicates_false() {
+        let inv_types = [
+            ItemType::Entity,
+            ItemType::Evidence,
+            ItemType::Thesis,
+            ItemType::Hypothesis,
+            ItemType::Analysis,
+            ItemType::Premise,
+            ItemType::Question,
+            ItemType::Block,
+        ];
+        for t in &inv_types {
+            assert!(!t.requires_refines(), "{t} should not require refines");
+            assert!(
+                !t.requires_derives_from(),
+                "{t} should not require derives_from"
+            );
+            assert!(!t.requires_satisfies(), "{t} should not require satisfies");
+            assert!(
+                !t.requires_specification(),
+                "{t} should not require specification"
+            );
+            assert!(!t.accepts_platform(), "{t} should not accept platform");
+            assert!(
+                !t.supports_depends_on(),
+                "{t} should not support depends_on"
+            );
+            assert!(!t.requires_deciders(), "{t} should not require deciders");
+            assert!(!t.supports_status(), "{t} should not support status");
+            assert!(
+                !t.supports_supersedes(),
+                "{t} should not support supersedes"
+            );
+        }
+    }
+
+    #[test]
+    fn test_investigation_required_parent_type() {
+        // All investigation types return None — multi-target parents handled via traceability_configs
+        assert!(ItemType::Entity.required_parent_type().is_none());
+        assert!(ItemType::Evidence.required_parent_type().is_none());
+        assert!(ItemType::Thesis.required_parent_type().is_none());
+        assert!(ItemType::Hypothesis.required_parent_type().is_none());
+        assert!(ItemType::Analysis.required_parent_type().is_none());
+        assert!(ItemType::Premise.required_parent_type().is_none());
+        assert!(ItemType::Question.required_parent_type().is_none());
+        assert!(ItemType::Block.required_parent_type().is_none());
+    }
+
+    #[test]
+    fn test_investigation_traceability_field() {
+        assert!(ItemType::Entity.traceability_field().is_none());
+        assert_eq!(
+            ItemType::Evidence.traceability_field(),
+            Some(FieldName::Parent)
+        );
+        assert!(ItemType::Thesis.traceability_field().is_none());
+        assert_eq!(
+            ItemType::Hypothesis.traceability_field(),
+            Some(FieldName::Parent)
+        );
+        assert_eq!(
+            ItemType::Analysis.traceability_field(),
+            Some(FieldName::Parent)
+        );
+        assert_eq!(
+            ItemType::Premise.traceability_field(),
+            Some(FieldName::EstablishedBy)
+        );
+        assert_eq!(
+            ItemType::Question.traceability_field(),
+            Some(FieldName::Parent)
+        );
+        assert!(ItemType::Block.traceability_field().is_none());
+    }
+
+    #[test]
+    fn test_investigation_traceability_configs() {
+        // Entity: root, no configs
+        assert!(ItemType::Entity.traceability_configs().is_empty());
+
+        // Evidence: Parent → Entity, Parent → Thesis
+        let configs = ItemType::Evidence.traceability_configs();
+        assert_eq!(configs.len(), 2);
+        assert!(
+            configs
+                .iter()
+                .all(|c| c.relationship_field == FieldName::Parent)
+        );
+
+        // Analysis: Parent + Cites + Evaluates
+        let configs = ItemType::Analysis.traceability_configs();
+        assert_eq!(configs.len(), 4);
+    }
+
+    #[test]
     fn test_item_builder() {
         let source = SourceLocation {
             repository: PathBuf::from("/repo"),
@@ -1088,5 +1474,77 @@ mod tests {
         let item = item.unwrap();
         assert_eq!(item.id.as_str(), "SOL-001");
         assert_eq!(item.name, "Test Solution");
+    }
+
+    #[test]
+    fn test_investigation_upstream_refs() {
+        let mut refs = UpstreamRefs::default();
+        assert!(refs.is_empty());
+
+        refs.parent.push(ItemId::new_unchecked("ITM-1"));
+        assert!(!refs.is_empty());
+        assert_eq!(refs.all_ids().count(), 1);
+
+        refs.cites.push(ItemId::new_unchecked("EVD-1"));
+        refs.evaluates.push(ItemId::new_unchecked("HYP-1"));
+        refs.established_by.push(ItemId::new_unchecked("THS-1"));
+        refs.raised_by.push(ItemId::new_unchecked("ANL-1"));
+        refs.premise_of.push(ItemId::new_unchecked("ANL-2"));
+        refs.gap_of.push(ItemId::new_unchecked("ANL-3"));
+        refs.hypothesis_of.push(ItemId::new_unchecked("THS-2"));
+        refs.analysis_of.push(ItemId::new_unchecked("THS-3"));
+        assert_eq!(refs.all_ids().count(), 9);
+    }
+
+    #[test]
+    fn test_investigation_downstream_refs() {
+        let mut refs = DownstreamRefs::default();
+        assert!(refs.is_empty());
+
+        refs.children.push(ItemId::new_unchecked("EVD-1"));
+        assert!(!refs.is_empty());
+
+        refs.cited_by.push(ItemId::new_unchecked("ANL-1"));
+        refs.evaluated_by.push(ItemId::new_unchecked("ANL-2"));
+        refs.establishes.push(ItemId::new_unchecked("PRM-1"));
+        refs.raises.push(ItemId::new_unchecked("QST-1"));
+        refs.premises.push(ItemId::new_unchecked("PRM-2"));
+        refs.gaps.push(ItemId::new_unchecked("QST-2"));
+        refs.hypotheses.push(ItemId::new_unchecked("HYP-1"));
+        refs.analyses.push(ItemId::new_unchecked("ANL-3"));
+        assert_eq!(refs.all_ids().count(), 9);
+    }
+
+    #[test]
+    fn test_investigation_peer_refs() {
+        let mut upstream = UpstreamRefs::default();
+        upstream.affects.push(ItemId::new_unchecked("EVD-1"));
+        assert!(!upstream.is_empty());
+        assert_eq!(upstream.all_ids().count(), 1);
+
+        let mut downstream = DownstreamRefs::default();
+        downstream.affected_by.push(ItemId::new_unchecked("BLK-1"));
+        assert!(!downstream.is_empty());
+        assert_eq!(downstream.all_ids().count(), 1);
+    }
+
+    #[test]
+    fn test_investigation_item_attributes() {
+        assert!(matches!(
+            ItemAttributes::for_type(ItemType::Entity),
+            ItemAttributes::Entity
+        ));
+        assert!(matches!(
+            ItemAttributes::for_type(ItemType::Evidence),
+            ItemAttributes::Evidence
+        ));
+        assert!(matches!(
+            ItemAttributes::for_type(ItemType::Thesis),
+            ItemAttributes::Thesis
+        ));
+        assert!(matches!(
+            ItemAttributes::for_type(ItemType::Analysis),
+            ItemAttributes::Analysis
+        ));
     }
 }

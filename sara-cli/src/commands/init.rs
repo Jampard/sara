@@ -389,6 +389,15 @@ fn build_type_config_from_interactive(input: &super::interactive::InteractiveInp
             supersedes: Vec::new(),
             superseded_by: None,
         },
+        // Investigation types — use solution config as base
+        (ItemType::Entity, _)
+        | (ItemType::Evidence, _)
+        | (ItemType::Thesis, _)
+        | (ItemType::Hypothesis, _)
+        | (ItemType::Analysis, _)
+        | (ItemType::Premise, _)
+        | (ItemType::Question, _)
+        | (ItemType::Block, _) => TypeConfig::Solution,
     }
 }
 

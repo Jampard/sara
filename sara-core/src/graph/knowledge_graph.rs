@@ -278,6 +278,60 @@ impl KnowledgeGraphBuilder {
             // Add inverse: target is superseded by this ADR
             graph.add_relationship(target_id, &item.id, RelationshipType::IsSupersededBy);
         }
+
+        // Investigation upstream relationships
+        for target_id in &item.upstream.parent {
+            graph.add_relationship(&item.id, target_id, RelationshipType::Parent);
+            graph.add_relationship(target_id, &item.id, RelationshipType::Children);
+        }
+        for target_id in &item.upstream.cites {
+            graph.add_relationship(&item.id, target_id, RelationshipType::Cites);
+            graph.add_relationship(target_id, &item.id, RelationshipType::CitedBy);
+        }
+        for target_id in &item.upstream.evaluates {
+            graph.add_relationship(&item.id, target_id, RelationshipType::Evaluates);
+            graph.add_relationship(target_id, &item.id, RelationshipType::EvaluatedBy);
+        }
+        for target_id in &item.upstream.established_by {
+            graph.add_relationship(&item.id, target_id, RelationshipType::EstablishedBy);
+            graph.add_relationship(target_id, &item.id, RelationshipType::Establishes);
+        }
+        for target_id in &item.upstream.raised_by {
+            graph.add_relationship(&item.id, target_id, RelationshipType::RaisedBy);
+            graph.add_relationship(target_id, &item.id, RelationshipType::Raises);
+        }
+
+        // Investigation downstream relationships
+        for target_id in &item.downstream.children {
+            graph.add_relationship(&item.id, target_id, RelationshipType::Children);
+            graph.add_relationship(target_id, &item.id, RelationshipType::Parent);
+        }
+        for target_id in &item.downstream.premises {
+            graph.add_relationship(&item.id, target_id, RelationshipType::InvestigationPremises);
+            graph.add_relationship(target_id, &item.id, RelationshipType::PremiseOf);
+        }
+        for target_id in &item.downstream.gaps {
+            graph.add_relationship(&item.id, target_id, RelationshipType::InvestigationGaps);
+            graph.add_relationship(target_id, &item.id, RelationshipType::GapOf);
+        }
+        for target_id in &item.downstream.hypotheses {
+            graph.add_relationship(
+                &item.id,
+                target_id,
+                RelationshipType::InvestigationHypotheses,
+            );
+            graph.add_relationship(target_id, &item.id, RelationshipType::HypothesisOf);
+        }
+        for target_id in &item.downstream.analyses {
+            graph.add_relationship(&item.id, target_id, RelationshipType::InvestigationAnalyses);
+            graph.add_relationship(target_id, &item.id, RelationshipType::AnalysisOf);
+        }
+
+        // Investigation peer relationships
+        for target_id in &item.upstream.affects {
+            graph.add_relationship(&item.id, target_id, RelationshipType::Affects);
+            graph.add_relationship(target_id, &item.id, RelationshipType::AffectedBy);
+        }
     }
 }
 
@@ -285,7 +339,10 @@ impl KnowledgeGraphBuilder {
 mod tests {
     use super::*;
     use crate::model::UpstreamRefs;
-    use crate::test_utils::{create_test_adr, create_test_item, create_test_item_with_upstream};
+    use crate::test_utils::{
+        create_test_adr, create_test_investigation_item, create_test_item,
+        create_test_item_with_refs, create_test_item_with_upstream,
+    };
 
     #[test]
     fn test_add_and_get_item() {
@@ -401,5 +458,113 @@ mod tests {
         // ADR-002 -> Supersedes -> ADR-001
         // ADR-001 -> IsSupersededBy -> ADR-002
         assert_eq!(graph.relationship_count(), 2);
+    }
+
+    #[test]
+    fn test_investigation_graph_construction() {
+        use crate::model::DownstreamRefs;
+
+        // Build a minimal investigation graph:
+        // ITM-001 (entity, root)
+        // THS-001 (thesis, root, downstream: hypotheses→HYP-001, analyses→ANL-001)
+        // EVD-001 (evidence, parent→ITM-001)
+        // HYP-001 (hypothesis, parent→THS-001)
+        // ANL-001 (analysis, parent→THS-001, cites→EVD-001, evaluates→HYP-001,
+        //          downstream: premises→PRM-001, gaps→QST-001)
+        // PRM-001 (premise, established_by→THS-001)
+        // QST-001 (question, raised_by→ANL-001)
+        // BLK-001 (block, affects→EVD-001)
+
+        let entity = create_test_item("ITM-001", ItemType::Entity);
+        let thesis = create_test_item_with_refs(
+            "THS-001",
+            ItemType::Thesis,
+            UpstreamRefs::default(),
+            DownstreamRefs {
+                hypotheses: vec![ItemId::new_unchecked("HYP-001")],
+                analyses: vec![ItemId::new_unchecked("ANL-001")],
+                ..Default::default()
+            },
+        );
+        let evidence = create_test_investigation_item("EVD-001", ItemType::Evidence, &["ITM-001"]);
+        let hypothesis =
+            create_test_investigation_item("HYP-001", ItemType::Hypothesis, &["THS-001"]);
+        let analysis_upstream = UpstreamRefs {
+            parent: vec![ItemId::new_unchecked("THS-001")],
+            cites: vec![ItemId::new_unchecked("EVD-001")],
+            evaluates: vec![ItemId::new_unchecked("HYP-001")],
+            ..Default::default()
+        };
+        let analysis_downstream = DownstreamRefs {
+            premises: vec![ItemId::new_unchecked("PRM-001")],
+            gaps: vec![ItemId::new_unchecked("QST-001")],
+            ..Default::default()
+        };
+        let analysis = create_test_item_with_refs(
+            "ANL-001",
+            ItemType::Analysis,
+            analysis_upstream,
+            analysis_downstream,
+        );
+        let premise = create_test_item_with_upstream(
+            "PRM-001",
+            ItemType::Premise,
+            UpstreamRefs {
+                established_by: vec![ItemId::new_unchecked("THS-001")],
+                ..Default::default()
+            },
+        );
+        let question = create_test_item_with_upstream(
+            "QST-001",
+            ItemType::Question,
+            UpstreamRefs {
+                raised_by: vec![ItemId::new_unchecked("ANL-001")],
+                ..Default::default()
+            },
+        );
+        let block = create_test_item_with_upstream(
+            "BLK-001",
+            ItemType::Block,
+            UpstreamRefs {
+                affects: vec![ItemId::new_unchecked("EVD-001")],
+                ..Default::default()
+            },
+        );
+
+        let graph = KnowledgeGraphBuilder::new()
+            .add_item(entity)
+            .add_item(thesis)
+            .add_item(evidence)
+            .add_item(hypothesis)
+            .add_item(analysis)
+            .add_item(premise)
+            .add_item(question)
+            .add_item(block)
+            .build()
+            .unwrap();
+
+        assert_eq!(graph.item_count(), 8);
+
+        // Verify nodes exist
+        assert!(graph.contains(&ItemId::new_unchecked("ITM-001")));
+        assert!(graph.contains(&ItemId::new_unchecked("ANL-001")));
+        assert!(graph.contains(&ItemId::new_unchecked("BLK-001")));
+
+        // Edges are bidirectional, so each declared relationship creates 2 edges.
+        // Declared relations:
+        //   EVD-001→ITM-001 (parent)        = 2
+        //   THS-001→HYP-001 (hypotheses)    = 2
+        //   THS-001→ANL-001 (analyses)      = 2
+        //   HYP-001→THS-001 (parent)        = 2
+        //   ANL-001→THS-001 (parent)        = 2
+        //   ANL-001→EVD-001 (cites)         = 2
+        //   ANL-001→HYP-001 (evaluates)     = 2
+        //   ANL-001→PRM-001 (premises)      = 2
+        //   ANL-001→QST-001 (gaps)          = 2
+        //   PRM-001→THS-001 (established_by)= 2
+        //   QST-001→ANL-001 (raised_by)     = 2
+        //   BLK-001→EVD-001 (affects)       = 2
+        // Total: 12 * 2 = 24 edges
+        assert_eq!(graph.relationship_count(), 24);
     }
 }

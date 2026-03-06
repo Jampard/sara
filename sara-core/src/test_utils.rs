@@ -214,6 +214,55 @@ pub fn create_test_item_with_refs(
         .expect("Test item should build successfully")
 }
 
+/// Creates a test investigation item with upstream references.
+///
+/// Convenience wrapper for investigation types that use the `parent` field
+/// as their primary upstream relation.
+#[must_use]
+pub fn create_test_investigation_item(id: &str, item_type: ItemType, parents: &[&str]) -> Item {
+    let upstream = UpstreamRefs {
+        parent: parents.iter().map(|s| ItemId::new_unchecked(*s)).collect(),
+        ..Default::default()
+    };
+    create_test_item_with_upstream(id, item_type, upstream)
+}
+
+/// Creates a test analysis item with cites and evaluates references.
+#[must_use]
+pub fn create_test_analysis(
+    id: &str,
+    parents: &[&str],
+    cites: &[&str],
+    evaluates: &[&str],
+) -> Item {
+    let upstream = UpstreamRefs {
+        parent: parents.iter().map(|s| ItemId::new_unchecked(*s)).collect(),
+        cites: cites.iter().map(|s| ItemId::new_unchecked(*s)).collect(),
+        evaluates: evaluates
+            .iter()
+            .map(|s| ItemId::new_unchecked(*s))
+            .collect(),
+        ..Default::default()
+    };
+    create_test_item_with_upstream(id, ItemType::Analysis, upstream)
+}
+
+/// Creates a simple investigation graph fixture.
+///
+/// Returns: Entity(ITM-001), Evidence(EVD-001 parent→ITM-001),
+/// Thesis(THS-001), Hypothesis(HYP-001 parent→THS-001),
+/// Analysis(ANL-001 parent→THS-001, cites→EVD-001, evaluates→HYP-001).
+#[must_use]
+pub fn create_investigation_hierarchy() -> Vec<Item> {
+    vec![
+        create_test_item("ITM-001", ItemType::Entity),
+        create_test_investigation_item("EVD-001", ItemType::Evidence, &["ITM-001"]),
+        create_test_item("THS-001", ItemType::Thesis),
+        create_test_investigation_item("HYP-001", ItemType::Hypothesis, &["THS-001"]),
+        create_test_analysis("ANL-001", &["THS-001"], &["EVD-001"], &["HYP-001"]),
+    ]
+}
+
 /// Creates a simple graph fixture with Solution -> UseCase -> Scenario chain.
 ///
 /// Returns a vector of items that can be added to a graph.
@@ -274,5 +323,34 @@ mod tests {
         assert_eq!(items[0].item_type, ItemType::Solution);
         assert_eq!(items[1].item_type, ItemType::UseCase);
         assert_eq!(items[2].item_type, ItemType::Scenario);
+    }
+
+    #[test]
+    fn test_create_test_investigation_item() {
+        let item = create_test_investigation_item("EVD-001", ItemType::Evidence, &["ITM-001"]);
+        assert_eq!(item.id.as_str(), "EVD-001");
+        assert_eq!(item.item_type, ItemType::Evidence);
+        assert_eq!(item.upstream.parent.len(), 1);
+        assert_eq!(item.upstream.parent[0].as_str(), "ITM-001");
+    }
+
+    #[test]
+    fn test_create_test_analysis() {
+        let item = create_test_analysis("ANL-001", &["THS-001"], &["EVD-001"], &["HYP-001"]);
+        assert_eq!(item.item_type, ItemType::Analysis);
+        assert_eq!(item.upstream.parent.len(), 1);
+        assert_eq!(item.upstream.cites.len(), 1);
+        assert_eq!(item.upstream.evaluates.len(), 1);
+    }
+
+    #[test]
+    fn test_create_investigation_hierarchy() {
+        let items = create_investigation_hierarchy();
+        assert_eq!(items.len(), 5);
+        assert_eq!(items[0].item_type, ItemType::Entity);
+        assert_eq!(items[1].item_type, ItemType::Evidence);
+        assert_eq!(items[2].item_type, ItemType::Thesis);
+        assert_eq!(items[3].item_type, ItemType::Hypothesis);
+        assert_eq!(items[4].item_type, ItemType::Analysis);
     }
 }

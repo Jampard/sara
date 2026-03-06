@@ -384,6 +384,15 @@ pub fn parse_item_type(type_str: &str) -> Option<ItemType> {
         "architecture_decision_record" | "architecturedecisionrecord" | "adr" => {
             Some(ItemType::ArchitectureDecisionRecord)
         }
+        // Investigation types
+        "entity" | "itm" => Some(ItemType::Entity),
+        "evidence" | "evd" => Some(ItemType::Evidence),
+        "thesis" | "ths" => Some(ItemType::Thesis),
+        "hypothesis" | "hyp" => Some(ItemType::Hypothesis),
+        "analysis" | "anl" => Some(ItemType::Analysis),
+        "premise" | "prm" => Some(ItemType::Premise),
+        "question" | "qst" => Some(ItemType::Question),
+        "block" | "blk" => Some(ItemType::Block),
         _ => None,
     }
 }
@@ -400,6 +409,26 @@ mod tests {
         assert_eq!(parse_item_type("use_case"), Some(ItemType::UseCase));
         assert_eq!(parse_item_type("UC"), Some(ItemType::UseCase));
         assert_eq!(parse_item_type("invalid"), None);
+    }
+
+    #[test]
+    fn test_parse_investigation_item_types() {
+        assert_eq!(parse_item_type("entity"), Some(ItemType::Entity));
+        assert_eq!(parse_item_type("ITM"), Some(ItemType::Entity));
+        assert_eq!(parse_item_type("evidence"), Some(ItemType::Evidence));
+        assert_eq!(parse_item_type("EVD"), Some(ItemType::Evidence));
+        assert_eq!(parse_item_type("thesis"), Some(ItemType::Thesis));
+        assert_eq!(parse_item_type("THS"), Some(ItemType::Thesis));
+        assert_eq!(parse_item_type("hypothesis"), Some(ItemType::Hypothesis));
+        assert_eq!(parse_item_type("HYP"), Some(ItemType::Hypothesis));
+        assert_eq!(parse_item_type("analysis"), Some(ItemType::Analysis));
+        assert_eq!(parse_item_type("ANL"), Some(ItemType::Analysis));
+        assert_eq!(parse_item_type("premise"), Some(ItemType::Premise));
+        assert_eq!(parse_item_type("PRM"), Some(ItemType::Premise));
+        assert_eq!(parse_item_type("question"), Some(ItemType::Question));
+        assert_eq!(parse_item_type("QST"), Some(ItemType::Question));
+        assert_eq!(parse_item_type("block"), Some(ItemType::Block));
+        assert_eq!(parse_item_type("BLK"), Some(ItemType::Block));
     }
 
     #[test]

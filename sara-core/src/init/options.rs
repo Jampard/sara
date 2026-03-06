@@ -213,6 +213,15 @@ impl TypeConfig {
             ItemType::SoftwareDetailedDesign => TypeConfig::software_detailed_design(),
             ItemType::HardwareDetailedDesign => TypeConfig::hardware_detailed_design(),
             ItemType::ArchitectureDecisionRecord => TypeConfig::adr(),
+            // Investigation types — use solution template as base (no required fields)
+            ItemType::Entity
+            | ItemType::Evidence
+            | ItemType::Thesis
+            | ItemType::Hypothesis
+            | ItemType::Analysis
+            | ItemType::Premise
+            | ItemType::Question
+            | ItemType::Block => TypeConfig::solution(),
         }
     }
 }

@@ -88,6 +88,46 @@ pub struct RawFrontmatter {
     /// Older ADRs this decision supersedes (for ADR items).
     #[serde(default)]
     pub supersedes: Vec<String>,
+
+    // Investigation upstream fields (author-declared)
+    #[serde(default)]
+    pub parent: Vec<String>,
+    #[serde(default)]
+    pub cites: Vec<String>,
+    #[serde(default)]
+    pub evaluates: Vec<String>,
+    #[serde(default)]
+    pub established_by: Vec<String>,
+    #[serde(default)]
+    pub raised_by: Vec<String>,
+
+    // Investigation downstream fields (author-declared)
+    #[serde(default)]
+    pub premises: Vec<String>,
+    #[serde(default)]
+    pub gaps: Vec<String>,
+    #[serde(default)]
+    pub hypotheses: Vec<String>,
+    #[serde(default)]
+    pub analyses: Vec<String>,
+
+    // Investigation downstream fields (auto-inferred inverses, author can also declare)
+    #[serde(default)]
+    pub children: Vec<String>,
+    #[serde(default)]
+    pub cited_by: Vec<String>,
+    #[serde(default)]
+    pub evaluated_by: Vec<String>,
+    #[serde(default)]
+    pub establishes: Vec<String>,
+    #[serde(default)]
+    pub raises: Vec<String>,
+
+    // Investigation peer fields
+    #[serde(default)]
+    pub affects: Vec<String>,
+    #[serde(default)]
+    pub affected_by: Vec<String>,
 }
 
 impl RawFrontmatter {
@@ -102,6 +142,20 @@ impl RawFrontmatter {
                 .collect(),
             satisfies: self.satisfies.iter().map(ItemId::new_unchecked).collect(),
             justifies: self.justifies.iter().map(ItemId::new_unchecked).collect(),
+            parent: self.parent.iter().map(ItemId::new_unchecked).collect(),
+            cites: self.cites.iter().map(ItemId::new_unchecked).collect(),
+            evaluates: self.evaluates.iter().map(ItemId::new_unchecked).collect(),
+            established_by: self
+                .established_by
+                .iter()
+                .map(ItemId::new_unchecked)
+                .collect(),
+            raised_by: self.raised_by.iter().map(ItemId::new_unchecked).collect(),
+            premise_of: Vec::new(),
+            gap_of: Vec::new(),
+            hypothesis_of: Vec::new(),
+            analysis_of: Vec::new(),
+            affects: self.affects.iter().map(ItemId::new_unchecked).collect(),
         })
     }
 
@@ -124,6 +178,20 @@ impl RawFrontmatter {
                 .as_ref()
                 .map(|ids| ids.iter().map(ItemId::new_unchecked).collect())
                 .unwrap_or_default(),
+            children: self.children.iter().map(ItemId::new_unchecked).collect(),
+            cited_by: self.cited_by.iter().map(ItemId::new_unchecked).collect(),
+            evaluated_by: self
+                .evaluated_by
+                .iter()
+                .map(ItemId::new_unchecked)
+                .collect(),
+            establishes: self.establishes.iter().map(ItemId::new_unchecked).collect(),
+            raises: self.raises.iter().map(ItemId::new_unchecked).collect(),
+            premises: self.premises.iter().map(ItemId::new_unchecked).collect(),
+            gaps: self.gaps.iter().map(ItemId::new_unchecked).collect(),
+            hypotheses: self.hypotheses.iter().map(ItemId::new_unchecked).collect(),
+            analyses: self.analyses.iter().map(ItemId::new_unchecked).collect(),
+            affected_by: self.affected_by.iter().map(ItemId::new_unchecked).collect(),
         })
     }
 }
@@ -210,6 +278,15 @@ pub fn parse_markdown_file(
                     .collect(),
             );
         }
+        // Investigation types — no type-specific attributes to set
+        ItemType::Entity
+        | ItemType::Evidence
+        | ItemType::Thesis
+        | ItemType::Hypothesis
+        | ItemType::Analysis
+        | ItemType::Premise
+        | ItemType::Question
+        | ItemType::Block => {}
     }
 
     builder.build().map_err(|e| ParseError::InvalidFrontmatter {
@@ -471,5 +548,89 @@ supersedes:
         assert_eq!(item.attributes.supersedes().len(), 2);
         assert_eq!(item.attributes.supersedes()[0].as_str(), "ADR-001");
         assert_eq!(item.attributes.supersedes()[1].as_str(), "ADR-002");
+    }
+
+    #[test]
+    fn test_parse_evidence_item() {
+        let content = r#"---
+id: "EVD-001"
+type: evidence
+name: "Test Evidence"
+description: "An evidence claim"
+parent:
+  - "ITM-001"
+---
+
+Evidence body text.
+"#;
+        let item = parse_markdown_file(
+            content,
+            &PathBuf::from("EVD-001.md"),
+            &PathBuf::from("/repo"),
+        )
+        .unwrap();
+
+        assert_eq!(item.item_type, ItemType::Evidence);
+        assert_eq!(item.id.as_str(), "EVD-001");
+        assert_eq!(item.upstream.parent.len(), 1);
+        assert_eq!(item.upstream.parent[0].as_str(), "ITM-001");
+    }
+
+    #[test]
+    fn test_parse_analysis_with_multiple_relations() {
+        let content = r#"---
+id: "ANL-001"
+type: analysis
+name: "Test Analysis"
+parent:
+  - "THS-001"
+cites:
+  - "EVD-001"
+  - "EVD-002"
+evaluates:
+  - "HYP-001"
+premises:
+  - "PRM-001"
+gaps:
+  - "QST-001"
+---
+
+Analysis body.
+"#;
+        let item = parse_markdown_file(
+            content,
+            &PathBuf::from("ANL-001.md"),
+            &PathBuf::from("/repo"),
+        )
+        .unwrap();
+
+        assert_eq!(item.item_type, ItemType::Analysis);
+        assert_eq!(item.upstream.parent.len(), 1);
+        assert_eq!(item.upstream.cites.len(), 2);
+        assert_eq!(item.upstream.evaluates.len(), 1);
+        assert_eq!(item.downstream.premises.len(), 1);
+        assert_eq!(item.downstream.gaps.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_block_with_affects() {
+        let content = r#"---
+id: "BLK-001"
+type: block
+name: "Test Block"
+affects:
+  - "EVD-001"
+  - "ANL-001"
+---
+"#;
+        let item = parse_markdown_file(
+            content,
+            &PathBuf::from("BLK-001.md"),
+            &PathBuf::from("/repo"),
+        )
+        .unwrap();
+
+        assert_eq!(item.item_type, ItemType::Block);
+        assert_eq!(item.upstream.affects.len(), 2);
     }
 }

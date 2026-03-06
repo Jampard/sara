@@ -321,6 +321,15 @@ impl GeneratorOptions {
             ItemType::HardwareDetailedDesign => "hardware_detailed_design.tera",
             ItemType::SoftwareDetailedDesign => "software_detailed_design.tera",
             ItemType::ArchitectureDecisionRecord => "adr.tera",
+            // Investigation types use a generic template
+            ItemType::Entity
+            | ItemType::Evidence
+            | ItemType::Thesis
+            | ItemType::Hypothesis
+            | ItemType::Analysis
+            | ItemType::Premise
+            | ItemType::Question
+            | ItemType::Block => "solution.tera",
         }
     }
 }

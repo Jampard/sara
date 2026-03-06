@@ -39,6 +39,32 @@ pub enum FieldName {
     Justifies,
     Supersedes,
     SupersededBy,
+
+    // Investigation upstream fields (author-declared + inverse of downstream)
+    Parent,
+    Cites,
+    Evaluates,
+    EstablishedBy,
+    RaisedBy,
+    PremiseOf,
+    GapOf,
+    HypothesisOf,
+    AnalysisOf,
+
+    // Investigation downstream fields (author-declared + inverse of upstream)
+    Children,
+    CitedBy,
+    EvaluatedBy,
+    Establishes,
+    Raises,
+    InvestigationPremises,
+    InvestigationGaps,
+    InvestigationHypotheses,
+    InvestigationAnalyses,
+
+    // Investigation peer fields
+    Affects,
+    AffectedBy,
 }
 
 impl FieldName {
@@ -65,6 +91,26 @@ impl FieldName {
             Self::Justifies,
             Self::Supersedes,
             Self::SupersededBy,
+            Self::Parent,
+            Self::Cites,
+            Self::Evaluates,
+            Self::EstablishedBy,
+            Self::RaisedBy,
+            Self::PremiseOf,
+            Self::GapOf,
+            Self::HypothesisOf,
+            Self::AnalysisOf,
+            Self::Children,
+            Self::CitedBy,
+            Self::EvaluatedBy,
+            Self::Establishes,
+            Self::Raises,
+            Self::InvestigationPremises,
+            Self::InvestigationGaps,
+            Self::InvestigationHypotheses,
+            Self::InvestigationAnalyses,
+            Self::Affects,
+            Self::AffectedBy,
         ]
     }
 
@@ -93,6 +139,26 @@ impl FieldName {
             Self::Justifies => "justifies",
             Self::Supersedes => "supersedes",
             Self::SupersededBy => "superseded_by",
+            Self::Parent => "parent",
+            Self::Cites => "cites",
+            Self::Evaluates => "evaluates",
+            Self::EstablishedBy => "established_by",
+            Self::RaisedBy => "raised_by",
+            Self::PremiseOf => "premise_of",
+            Self::GapOf => "gap_of",
+            Self::HypothesisOf => "hypothesis_of",
+            Self::AnalysisOf => "analysis_of",
+            Self::Children => "children",
+            Self::CitedBy => "cited_by",
+            Self::EvaluatedBy => "evaluated_by",
+            Self::Establishes => "establishes",
+            Self::Raises => "raises",
+            Self::InvestigationPremises => "premises",
+            Self::InvestigationGaps => "gaps",
+            Self::InvestigationHypotheses => "hypotheses",
+            Self::InvestigationAnalyses => "analyses",
+            Self::Affects => "affects",
+            Self::AffectedBy => "affected_by",
         }
     }
 
@@ -121,6 +187,26 @@ impl FieldName {
             Self::Justifies => "Justifies",
             Self::Supersedes => "Supersedes",
             Self::SupersededBy => "Superseded by",
+            Self::Parent => "Parent",
+            Self::Cites => "Cites",
+            Self::Evaluates => "Evaluates",
+            Self::EstablishedBy => "Established by",
+            Self::RaisedBy => "Raised by",
+            Self::PremiseOf => "Premise of",
+            Self::GapOf => "Gap of",
+            Self::HypothesisOf => "Hypothesis of",
+            Self::AnalysisOf => "Analysis of",
+            Self::Children => "Children",
+            Self::CitedBy => "Cited by",
+            Self::EvaluatedBy => "Evaluated by",
+            Self::Establishes => "Establishes",
+            Self::Raises => "Raises",
+            Self::InvestigationPremises => "Premises",
+            Self::InvestigationGaps => "Gaps",
+            Self::InvestigationHypotheses => "Hypotheses",
+            Self::InvestigationAnalyses => "Analyses",
+            Self::Affects => "Affects",
+            Self::AffectedBy => "Affected by",
         }
     }
 
@@ -128,7 +214,19 @@ impl FieldName {
     pub const fn is_upstream(&self) -> bool {
         matches!(
             self,
-            Self::Refines | Self::DerivesFrom | Self::Satisfies | Self::Justifies
+            Self::Refines
+                | Self::DerivesFrom
+                | Self::Satisfies
+                | Self::Justifies
+                | Self::Parent
+                | Self::Cites
+                | Self::Evaluates
+                | Self::EstablishedBy
+                | Self::RaisedBy
+                | Self::PremiseOf
+                | Self::GapOf
+                | Self::HypothesisOf
+                | Self::AnalysisOf
         )
     }
 
@@ -136,7 +234,19 @@ impl FieldName {
     pub const fn is_downstream(&self) -> bool {
         matches!(
             self,
-            Self::IsRefinedBy | Self::Derives | Self::IsSatisfiedBy | Self::JustifiedBy
+            Self::IsRefinedBy
+                | Self::Derives
+                | Self::IsSatisfiedBy
+                | Self::JustifiedBy
+                | Self::Children
+                | Self::CitedBy
+                | Self::EvaluatedBy
+                | Self::Establishes
+                | Self::Raises
+                | Self::InvestigationPremises
+                | Self::InvestigationGaps
+                | Self::InvestigationHypotheses
+                | Self::InvestigationAnalyses
         )
     }
 
@@ -144,7 +254,12 @@ impl FieldName {
     pub const fn is_peer(&self) -> bool {
         matches!(
             self,
-            Self::DependsOn | Self::IsRequiredBy | Self::Supersedes | Self::SupersededBy
+            Self::DependsOn
+                | Self::IsRequiredBy
+                | Self::Supersedes
+                | Self::SupersededBy
+                | Self::Affects
+                | Self::AffectedBy
         )
     }
 
@@ -196,11 +311,66 @@ mod tests {
         assert!(all.contains(&FieldName::Specification));
         assert!(all.contains(&FieldName::Status));
         assert!(all.contains(&FieldName::Justifies));
-        assert_eq!(all.len(), 20);
+        assert_eq!(all.len(), 40);
     }
 
     #[test]
     fn test_field_name_display() {
         assert_eq!(format!("{}", FieldName::DerivesFrom), "derives_from");
+    }
+
+    #[test]
+    fn test_investigation_field_names() {
+        // Upstream investigation fields
+        assert_eq!(FieldName::Parent.as_str(), "parent");
+        assert_eq!(FieldName::Cites.as_str(), "cites");
+        assert_eq!(FieldName::Evaluates.as_str(), "evaluates");
+        assert_eq!(FieldName::EstablishedBy.as_str(), "established_by");
+        assert_eq!(FieldName::RaisedBy.as_str(), "raised_by");
+        assert_eq!(FieldName::PremiseOf.as_str(), "premise_of");
+        assert_eq!(FieldName::GapOf.as_str(), "gap_of");
+        assert_eq!(FieldName::HypothesisOf.as_str(), "hypothesis_of");
+        assert_eq!(FieldName::AnalysisOf.as_str(), "analysis_of");
+
+        // Downstream investigation fields
+        assert_eq!(FieldName::Children.as_str(), "children");
+        assert_eq!(FieldName::CitedBy.as_str(), "cited_by");
+        assert_eq!(FieldName::EvaluatedBy.as_str(), "evaluated_by");
+        assert_eq!(FieldName::Establishes.as_str(), "establishes");
+        assert_eq!(FieldName::Raises.as_str(), "raises");
+        assert_eq!(FieldName::InvestigationPremises.as_str(), "premises");
+        assert_eq!(FieldName::InvestigationGaps.as_str(), "gaps");
+        assert_eq!(FieldName::InvestigationHypotheses.as_str(), "hypotheses");
+        assert_eq!(FieldName::InvestigationAnalyses.as_str(), "analyses");
+
+        // Peer investigation fields
+        assert_eq!(FieldName::Affects.as_str(), "affects");
+        assert_eq!(FieldName::AffectedBy.as_str(), "affected_by");
+    }
+
+    #[test]
+    fn test_investigation_field_directions() {
+        assert!(FieldName::Parent.is_upstream());
+        assert!(FieldName::Cites.is_upstream());
+        assert!(FieldName::Evaluates.is_upstream());
+        assert!(FieldName::EstablishedBy.is_upstream());
+        assert!(FieldName::RaisedBy.is_upstream());
+        assert!(FieldName::PremiseOf.is_upstream());
+        assert!(FieldName::GapOf.is_upstream());
+        assert!(FieldName::HypothesisOf.is_upstream());
+        assert!(FieldName::AnalysisOf.is_upstream());
+
+        assert!(FieldName::Children.is_downstream());
+        assert!(FieldName::CitedBy.is_downstream());
+        assert!(FieldName::EvaluatedBy.is_downstream());
+        assert!(FieldName::Establishes.is_downstream());
+        assert!(FieldName::Raises.is_downstream());
+        assert!(FieldName::InvestigationPremises.is_downstream());
+        assert!(FieldName::InvestigationGaps.is_downstream());
+        assert!(FieldName::InvestigationHypotheses.is_downstream());
+        assert!(FieldName::InvestigationAnalyses.is_downstream());
+
+        assert!(FieldName::Affects.is_peer());
+        assert!(FieldName::AffectedBy.is_peer());
     }
 }

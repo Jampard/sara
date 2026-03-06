@@ -33,6 +33,48 @@ pub enum RelationshipType {
     Supersedes,
     /// Inverse of Supersedes: older ADR is superseded by newer ADR.
     IsSupersededBy,
+
+    // Investigation relationship types
+    /// Hierarchical parent (evidence/hypothesis/analysis/question → entity/thesis).
+    Parent,
+    /// Inverse of Parent.
+    Children,
+    /// Citation (analysis → evidence).
+    Cites,
+    /// Inverse of Cites.
+    CitedBy,
+    /// Evaluation (analysis → hypothesis).
+    Evaluates,
+    /// Inverse of Evaluates.
+    EvaluatedBy,
+    /// Downstream: analysis → premise.
+    InvestigationPremises,
+    /// Inverse of Premises.
+    PremiseOf,
+    /// Downstream: analysis → question (gaps).
+    InvestigationGaps,
+    /// Inverse of Gaps.
+    GapOf,
+    /// Upstream: premise → thesis.
+    EstablishedBy,
+    /// Inverse of EstablishedBy.
+    Establishes,
+    /// Upstream: question → analysis/evidence.
+    RaisedBy,
+    /// Inverse of RaisedBy.
+    Raises,
+    /// Peer constraint: block → evidence/analysis/question.
+    Affects,
+    /// Inverse of Affects.
+    AffectedBy,
+    /// Downstream: thesis → hypothesis.
+    InvestigationHypotheses,
+    /// Inverse of Hypotheses.
+    HypothesisOf,
+    /// Downstream: thesis → analysis.
+    InvestigationAnalyses,
+    /// Inverse of Analyses.
+    AnalysisOf,
 }
 
 impl RelationshipType {
@@ -52,6 +94,26 @@ impl RelationshipType {
             Self::IsJustifiedBy => Self::Justifies,
             Self::Supersedes => Self::IsSupersededBy,
             Self::IsSupersededBy => Self::Supersedes,
+            Self::Parent => Self::Children,
+            Self::Children => Self::Parent,
+            Self::Cites => Self::CitedBy,
+            Self::CitedBy => Self::Cites,
+            Self::Evaluates => Self::EvaluatedBy,
+            Self::EvaluatedBy => Self::Evaluates,
+            Self::InvestigationPremises => Self::PremiseOf,
+            Self::PremiseOf => Self::InvestigationPremises,
+            Self::InvestigationGaps => Self::GapOf,
+            Self::GapOf => Self::InvestigationGaps,
+            Self::EstablishedBy => Self::Establishes,
+            Self::Establishes => Self::EstablishedBy,
+            Self::RaisedBy => Self::Raises,
+            Self::Raises => Self::RaisedBy,
+            Self::Affects => Self::AffectedBy,
+            Self::AffectedBy => Self::Affects,
+            Self::InvestigationHypotheses => Self::HypothesisOf,
+            Self::HypothesisOf => Self::InvestigationHypotheses,
+            Self::InvestigationAnalyses => Self::AnalysisOf,
+            Self::AnalysisOf => Self::InvestigationAnalyses,
         }
     }
 
@@ -61,7 +123,19 @@ impl RelationshipType {
     pub const fn is_upstream(&self) -> bool {
         matches!(
             self,
-            Self::Refines | Self::DerivesFrom | Self::Satisfies | Self::Justifies
+            Self::Refines
+                | Self::DerivesFrom
+                | Self::Satisfies
+                | Self::Justifies
+                | Self::Parent
+                | Self::Cites
+                | Self::Evaluates
+                | Self::EstablishedBy
+                | Self::RaisedBy
+                | Self::PremiseOf
+                | Self::GapOf
+                | Self::HypothesisOf
+                | Self::AnalysisOf
         )
     }
 
@@ -70,7 +144,19 @@ impl RelationshipType {
     pub const fn is_downstream(&self) -> bool {
         matches!(
             self,
-            Self::IsRefinedBy | Self::Derives | Self::IsSatisfiedBy | Self::IsJustifiedBy
+            Self::IsRefinedBy
+                | Self::Derives
+                | Self::IsSatisfiedBy
+                | Self::IsJustifiedBy
+                | Self::Children
+                | Self::CitedBy
+                | Self::EvaluatedBy
+                | Self::Establishes
+                | Self::Raises
+                | Self::InvestigationPremises
+                | Self::InvestigationGaps
+                | Self::InvestigationHypotheses
+                | Self::InvestigationAnalyses
         )
     }
 
@@ -79,7 +165,12 @@ impl RelationshipType {
     pub const fn is_peer(&self) -> bool {
         matches!(
             self,
-            Self::DependsOn | Self::IsRequiredBy | Self::Supersedes | Self::IsSupersededBy
+            Self::DependsOn
+                | Self::IsRequiredBy
+                | Self::Supersedes
+                | Self::IsSupersededBy
+                | Self::Affects
+                | Self::AffectedBy
         )
     }
 
@@ -101,6 +192,16 @@ impl RelationshipType {
                 | Self::Justifies
                 | Self::DependsOn
                 | Self::Supersedes
+                | Self::Parent
+                | Self::Cites
+                | Self::Evaluates
+                | Self::EstablishedBy
+                | Self::RaisedBy
+                | Self::InvestigationPremises
+                | Self::InvestigationGaps
+                | Self::InvestigationHypotheses
+                | Self::InvestigationAnalyses
+                | Self::Affects
         )
     }
 
@@ -120,6 +221,26 @@ impl RelationshipType {
             Self::IsJustifiedBy => FieldName::JustifiedBy,
             Self::Supersedes => FieldName::Supersedes,
             Self::IsSupersededBy => FieldName::SupersededBy,
+            Self::Parent => FieldName::Parent,
+            Self::Children => FieldName::Children,
+            Self::Cites => FieldName::Cites,
+            Self::CitedBy => FieldName::CitedBy,
+            Self::Evaluates => FieldName::Evaluates,
+            Self::EvaluatedBy => FieldName::EvaluatedBy,
+            Self::InvestigationPremises => FieldName::InvestigationPremises,
+            Self::PremiseOf => FieldName::PremiseOf,
+            Self::InvestigationGaps => FieldName::InvestigationGaps,
+            Self::GapOf => FieldName::GapOf,
+            Self::EstablishedBy => FieldName::EstablishedBy,
+            Self::Establishes => FieldName::Establishes,
+            Self::RaisedBy => FieldName::RaisedBy,
+            Self::Raises => FieldName::Raises,
+            Self::Affects => FieldName::Affects,
+            Self::AffectedBy => FieldName::AffectedBy,
+            Self::InvestigationHypotheses => FieldName::InvestigationHypotheses,
+            Self::HypothesisOf => FieldName::HypothesisOf,
+            Self::InvestigationAnalyses => FieldName::InvestigationAnalyses,
+            Self::AnalysisOf => FieldName::AnalysisOf,
         }
     }
 }
@@ -205,6 +326,17 @@ impl RelationshipRules {
                     ItemType::HardwareDetailedDesign,
                 ],
             )),
+            // Investigation types
+            ItemType::Entity | ItemType::Thesis | ItemType::Block => None,
+            ItemType::Evidence | ItemType::Hypothesis | ItemType::Question => Some((
+                RelationshipType::Parent,
+                vec![ItemType::Entity, ItemType::Thesis],
+            )),
+            ItemType::Analysis => Some((
+                RelationshipType::Parent,
+                vec![ItemType::Entity, ItemType::Thesis],
+            )),
+            ItemType::Premise => Some((RelationshipType::EstablishedBy, vec![ItemType::Thesis])),
         }
     }
 
@@ -238,6 +370,34 @@ impl RelationshipRules {
                 vec![ItemType::ArchitectureDecisionRecord],
             )),
             ItemType::ArchitectureDecisionRecord => None,
+            // Investigation types
+            ItemType::Entity => Some((
+                RelationshipType::Children,
+                vec![
+                    ItemType::Evidence,
+                    ItemType::Hypothesis,
+                    ItemType::Analysis,
+                    ItemType::Question,
+                ],
+            )),
+            ItemType::Thesis => Some((
+                RelationshipType::Children,
+                vec![
+                    ItemType::Evidence,
+                    ItemType::Hypothesis,
+                    ItemType::Analysis,
+                    ItemType::Question,
+                ],
+            )),
+            ItemType::Evidence
+            | ItemType::Hypothesis
+            | ItemType::Premise
+            | ItemType::Question
+            | ItemType::Block => None,
+            ItemType::Analysis => Some((
+                RelationshipType::InvestigationPremises,
+                vec![ItemType::Premise],
+            )),
         }
     }
 
@@ -313,6 +473,27 @@ impl RelationshipRules {
             | RelationshipType::IsRequiredBy
             | RelationshipType::Supersedes
             | RelationshipType::IsSupersededBy => Self::valid_peer_for(from_type) == Some(to_type),
+            // Investigation relationships — validated via traceability_configs, allow all for now
+            RelationshipType::Parent
+            | RelationshipType::Children
+            | RelationshipType::Cites
+            | RelationshipType::CitedBy
+            | RelationshipType::Evaluates
+            | RelationshipType::EvaluatedBy
+            | RelationshipType::InvestigationPremises
+            | RelationshipType::PremiseOf
+            | RelationshipType::InvestigationGaps
+            | RelationshipType::GapOf
+            | RelationshipType::EstablishedBy
+            | RelationshipType::Establishes
+            | RelationshipType::RaisedBy
+            | RelationshipType::Raises
+            | RelationshipType::Affects
+            | RelationshipType::AffectedBy
+            | RelationshipType::InvestigationHypotheses
+            | RelationshipType::HypothesisOf
+            | RelationshipType::InvestigationAnalyses
+            | RelationshipType::AnalysisOf => true,
         }
     }
 }
@@ -459,5 +640,129 @@ mod tests {
         // Supersedes/IsSupersededBy are peer
         assert!(RelationshipType::Supersedes.is_peer());
         assert!(RelationshipType::IsSupersededBy.is_peer());
+    }
+
+    #[test]
+    fn test_investigation_relationship_types() {
+        assert_eq!(
+            RelationshipType::Parent.inverse(),
+            RelationshipType::Children
+        );
+        assert_eq!(RelationshipType::Cites.inverse(), RelationshipType::CitedBy);
+        assert_eq!(
+            RelationshipType::Evaluates.inverse(),
+            RelationshipType::EvaluatedBy
+        );
+        assert_eq!(
+            RelationshipType::InvestigationPremises.inverse(),
+            RelationshipType::PremiseOf
+        );
+        assert_eq!(
+            RelationshipType::InvestigationGaps.inverse(),
+            RelationshipType::GapOf
+        );
+        assert_eq!(
+            RelationshipType::EstablishedBy.inverse(),
+            RelationshipType::Establishes
+        );
+        assert_eq!(
+            RelationshipType::RaisedBy.inverse(),
+            RelationshipType::Raises
+        );
+        assert_eq!(
+            RelationshipType::Affects.inverse(),
+            RelationshipType::AffectedBy
+        );
+        assert_eq!(
+            RelationshipType::InvestigationHypotheses.inverse(),
+            RelationshipType::HypothesisOf
+        );
+        assert_eq!(
+            RelationshipType::InvestigationAnalyses.inverse(),
+            RelationshipType::AnalysisOf
+        );
+    }
+
+    #[test]
+    fn test_investigation_relationship_directions() {
+        // Upstream
+        assert!(RelationshipType::Parent.is_upstream());
+        assert!(RelationshipType::Cites.is_upstream());
+        assert!(RelationshipType::Evaluates.is_upstream());
+        assert!(RelationshipType::EstablishedBy.is_upstream());
+        assert!(RelationshipType::RaisedBy.is_upstream());
+
+        // Downstream
+        assert!(RelationshipType::Children.is_downstream());
+        assert!(RelationshipType::CitedBy.is_downstream());
+        assert!(RelationshipType::EvaluatedBy.is_downstream());
+        assert!(RelationshipType::Establishes.is_downstream());
+        assert!(RelationshipType::Raises.is_downstream());
+        assert!(RelationshipType::InvestigationPremises.is_downstream());
+        assert!(RelationshipType::InvestigationGaps.is_downstream());
+        assert!(RelationshipType::InvestigationHypotheses.is_downstream());
+        assert!(RelationshipType::InvestigationAnalyses.is_downstream());
+        assert!(RelationshipType::PremiseOf.is_upstream());
+        assert!(RelationshipType::GapOf.is_upstream());
+        assert!(RelationshipType::HypothesisOf.is_upstream());
+        assert!(RelationshipType::AnalysisOf.is_upstream());
+
+        // Peer
+        assert!(RelationshipType::Affects.is_peer());
+        assert!(RelationshipType::AffectedBy.is_peer());
+    }
+
+    #[test]
+    fn test_investigation_relationship_primary() {
+        assert!(RelationshipType::Parent.is_primary());
+        assert!(RelationshipType::Cites.is_primary());
+        assert!(RelationshipType::Evaluates.is_primary());
+        assert!(RelationshipType::EstablishedBy.is_primary());
+        assert!(RelationshipType::RaisedBy.is_primary());
+        assert!(RelationshipType::InvestigationPremises.is_primary());
+        assert!(RelationshipType::InvestigationGaps.is_primary());
+        assert!(RelationshipType::InvestigationHypotheses.is_primary());
+        assert!(RelationshipType::InvestigationAnalyses.is_primary());
+        assert!(RelationshipType::Affects.is_primary());
+
+        assert!(!RelationshipType::Children.is_primary());
+        assert!(!RelationshipType::AffectedBy.is_primary());
+    }
+
+    #[test]
+    fn test_investigation_relationship_field_names() {
+        assert_eq!(RelationshipType::Parent.field_name(), FieldName::Parent);
+        assert_eq!(RelationshipType::Cites.field_name(), FieldName::Cites);
+        assert_eq!(RelationshipType::Affects.field_name(), FieldName::Affects);
+        assert_eq!(RelationshipType::Children.field_name(), FieldName::Children);
+        assert_eq!(
+            RelationshipType::InvestigationPremises.field_name(),
+            FieldName::InvestigationPremises
+        );
+    }
+
+    #[test]
+    fn test_investigation_relationship_rules() {
+        // Evidence → Entity/Thesis via Parent
+        let result = RelationshipRules::valid_upstream_for(ItemType::Evidence);
+        assert!(result.is_some());
+        let (rel, targets) = result.unwrap();
+        assert_eq!(rel, RelationshipType::Parent);
+        assert!(targets.contains(&ItemType::Entity));
+        assert!(targets.contains(&ItemType::Thesis));
+
+        // Analysis → Entity/Thesis via Parent (primary upstream)
+        let (rel, _) = RelationshipRules::valid_upstream_for(ItemType::Analysis).unwrap();
+        assert_eq!(rel, RelationshipType::Parent);
+
+        // Entity is root — no upstream
+        assert!(RelationshipRules::valid_upstream_for(ItemType::Entity).is_none());
+        assert!(RelationshipRules::valid_upstream_for(ItemType::Thesis).is_none());
+        assert!(RelationshipRules::valid_upstream_for(ItemType::Block).is_none());
+
+        // Premise → Thesis via EstablishedBy
+        let (rel, targets) = RelationshipRules::valid_upstream_for(ItemType::Premise).unwrap();
+        assert_eq!(rel, RelationshipType::EstablishedBy);
+        assert!(targets.contains(&ItemType::Thesis));
     }
 }
