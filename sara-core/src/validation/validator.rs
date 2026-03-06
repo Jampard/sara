@@ -9,7 +9,7 @@ use crate::validation::report::{ValidationReport, ValidationReportBuilder};
 use crate::validation::rule::{Severity, ValidationRule};
 use crate::validation::rules::{
     BrokenReferencesRule, CyclesRule, DuplicatesRule, MetadataRule, OrphansRule,
-    RedundantRelationshipsRule, RelationshipsRule,
+    RedundantRelationshipsRule, RelationshipsRule, SuspectLinksRule,
 };
 
 /// All validation rules.
@@ -21,6 +21,7 @@ static RULES: &[&dyn ValidationRule] = &[
     &MetadataRule,
     &RedundantRelationshipsRule,
     &OrphansRule,
+    &SuspectLinksRule,
 ];
 
 /// Orchestrates all validation rules.

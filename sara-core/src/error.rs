@@ -44,6 +44,8 @@ pub enum ValidationErrorCode {
     UnrecognizedField,
     /// Both sides of a relationship declare it.
     RedundantRelationship,
+    /// Link target changed since last review.
+    SuspectLink,
 }
 
 impl ValidationErrorCode {
@@ -61,6 +63,7 @@ impl ValidationErrorCode {
             Self::InvalidMetadata => "invalid_metadata",
             Self::UnrecognizedField => "unrecognized_field",
             Self::RedundantRelationship => "redundant_relationship",
+            Self::SuspectLink => "suspect_link",
         }
     }
 }
@@ -138,6 +141,13 @@ pub enum ValidationError {
         from_rel: RelationshipType,
         to_rel: RelationshipType,
     },
+
+    #[error("Suspect link: {source_id} → {target_id}: {reason}")]
+    SuspectLink {
+        source_id: String,
+        target_id: String,
+        reason: String,
+    },
 }
 
 impl ValidationError {
@@ -146,7 +156,9 @@ impl ValidationError {
     pub const fn is_error(&self) -> bool {
         !matches!(
             self,
-            Self::UnrecognizedField { .. } | Self::RedundantRelationship { .. }
+            Self::UnrecognizedField { .. }
+                | Self::RedundantRelationship { .. }
+                | Self::SuspectLink { .. }
         )
     }
 
@@ -164,6 +176,7 @@ impl ValidationError {
             Self::InvalidMetadata { .. } => ValidationErrorCode::InvalidMetadata,
             Self::UnrecognizedField { .. } => ValidationErrorCode::UnrecognizedField,
             Self::RedundantRelationship { .. } => ValidationErrorCode::RedundantRelationship,
+            Self::SuspectLink { .. } => ValidationErrorCode::SuspectLink,
         }
     }
 }
