@@ -1,8 +1,10 @@
 //! Markdown file parsing and document extraction.
 
+use std::collections::HashMap;
 use std::path::Path;
 
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 
 use crate::error::ParseError;
 use crate::model::{
@@ -128,6 +130,20 @@ pub struct RawFrontmatter {
     pub affects: Vec<String>,
     #[serde(default)]
     pub affected_by: Vec<String>,
+
+    // Fingerprint/review fields
+    #[serde(default)]
+    pub outcome: Option<String>,
+    #[serde(default)]
+    pub sourcing: Option<String>,
+    #[serde(default)]
+    pub relation: Option<String>,
+    #[serde(default)]
+    pub assessment: Option<String>,
+    #[serde(default)]
+    pub reviewed: Option<String>,
+    #[serde(default)]
+    pub stamps: HashMap<String, String>,
 }
 
 impl RawFrontmatter {
@@ -278,15 +294,46 @@ pub fn parse_markdown_file(
                     .collect(),
             );
         }
-        // Investigation types — no type-specific attributes to set
-        ItemType::Entity
-        | ItemType::Evidence
-        | ItemType::Thesis
-        | ItemType::Hypothesis
-        | ItemType::Analysis
-        | ItemType::Premise
-        | ItemType::Question
+        // Investigation types — type-specific attribute fields
+        ItemType::Entity | ItemType::Thesis | ItemType::Premise | ItemType::Question
         | ItemType::Block => {}
+        ItemType::Evidence => {
+            if let Some(ref s) = frontmatter.sourcing {
+                builder = builder.sourcing(s.clone());
+            }
+            if let Some(ref r) = frontmatter.relation {
+                builder = builder.relation(r.clone());
+            }
+        }
+        ItemType::Analysis | ItemType::Hypothesis => {
+            if let Some(ref a) = frontmatter.assessment {
+                builder = builder.assessment(a.clone());
+            }
+        }
+    }
+
+    // Set fingerprint/review fields
+    if let Some(ref outcome) = frontmatter.outcome {
+        builder = builder.outcome(outcome.clone());
+    }
+    if let Some(ref reviewed) = frontmatter.reviewed {
+        builder = builder.reviewed(reviewed.clone());
+    }
+    if !frontmatter.stamps.is_empty() {
+        let stamps: HashMap<ItemId, String> = frontmatter
+            .stamps
+            .iter()
+            .map(|(k, v)| (ItemId::new_unchecked(k), v.clone()))
+            .collect();
+        builder = builder.stamps(stamps);
+    }
+
+    // Compute body_hash from body content
+    let body = &extracted.body;
+    let trimmed_body = body.trim();
+    if !trimmed_body.is_empty() {
+        let hash = Sha256::digest(trimmed_body.as_bytes());
+        builder = builder.body_hash(format!("{:x}", hash));
     }
 
     builder.build().map_err(|e| ParseError::InvalidFrontmatter {
@@ -610,6 +657,106 @@ Analysis body.
         assert_eq!(item.upstream.evaluates.len(), 1);
         assert_eq!(item.downstream.premises.len(), 1);
         assert_eq!(item.downstream.gaps.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_evidence_with_outcome_and_sourcing() {
+        let content = r#"---
+id: "EVD-010"
+type: evidence
+name: "Test Evidence"
+outcome: "open"
+sourcing: "C"
+relation: "hosted"
+parent:
+  - "ITM-001"
+---
+# Evidence body
+"#;
+        let item = parse_markdown_file(
+            content,
+            &PathBuf::from("EVD-010.md"),
+            &PathBuf::from("/repo"),
+        )
+        .unwrap();
+
+        assert_eq!(item.outcome.as_deref(), Some("open"));
+        assert_eq!(item.attributes.sourcing(), Some("C"));
+        assert_eq!(item.attributes.evidence_relation(), Some("hosted"));
+    }
+
+    #[test]
+    fn test_parse_analysis_with_assessment() {
+        let content = r#"---
+id: "ANL-010"
+type: analysis
+name: "Test Analysis"
+outcome: "open"
+assessment: "very-likely"
+parent:
+  - "THS-001"
+---
+# Analysis body
+"#;
+        let item = parse_markdown_file(
+            content,
+            &PathBuf::from("ANL-010.md"),
+            &PathBuf::from("/repo"),
+        )
+        .unwrap();
+
+        assert_eq!(item.outcome.as_deref(), Some("open"));
+        assert_eq!(item.attributes.assessment(), Some("very-likely"));
+    }
+
+    #[test]
+    fn test_parse_item_with_stamps_and_reviewed() {
+        let content = r#"---
+id: "ANL-011"
+type: analysis
+name: "Test Analysis"
+reviewed: "deadbeef"
+stamps:
+  EVD-001: "abcd1234"
+  HYP-001: "ef567890"
+parent:
+  - "THS-001"
+---
+# Analysis body
+"#;
+        let item = parse_markdown_file(
+            content,
+            &PathBuf::from("ANL-011.md"),
+            &PathBuf::from("/repo"),
+        )
+        .unwrap();
+
+        assert_eq!(item.reviewed.as_deref(), Some("deadbeef"));
+        assert_eq!(item.stamps.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_body_hash_computed() {
+        let content = r#"---
+id: "EVD-020"
+type: evidence
+name: "Test"
+parent:
+  - "ITM-001"
+---
+# Some body content
+With multiple lines.
+"#;
+        let item = parse_markdown_file(
+            content,
+            &PathBuf::from("EVD-020.md"),
+            &PathBuf::from("/repo"),
+        )
+        .unwrap();
+
+        assert!(item.body_hash.is_some());
+        assert!(!item.body_hash.as_ref().unwrap().is_empty());
+        assert_eq!(item.body_hash.as_ref().unwrap().len(), 64); // SHA-256 hex
     }
 
     #[test]
