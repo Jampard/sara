@@ -1,6 +1,7 @@
 //! Item types and structures for the knowledge graph.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt;
 
 use crate::error::ValidationError;
@@ -816,17 +817,33 @@ pub enum ItemAttributes {
         supersedes: Vec<ItemId>,
     },
 
-    // Investigation types — simple unit variants, no type-specific fields
+    // Investigation types
     #[serde(rename = "entity")]
     Entity,
+
     #[serde(rename = "evidence")]
-    Evidence,
+    Evidence {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sourcing: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        relation: Option<String>,
+    },
+
     #[serde(rename = "thesis")]
     Thesis,
+
     #[serde(rename = "hypothesis")]
-    Hypothesis,
+    Hypothesis {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        assessment: Option<String>,
+    },
+
     #[serde(rename = "analysis")]
-    Analysis,
+    Analysis {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        assessment: Option<String>,
+    },
+
     #[serde(rename = "premise")]
     Premise,
     #[serde(rename = "question")]
@@ -864,10 +881,13 @@ impl ItemAttributes {
                 supersedes: Vec::new(),
             },
             ItemType::Entity => ItemAttributes::Entity,
-            ItemType::Evidence => ItemAttributes::Evidence,
+            ItemType::Evidence => ItemAttributes::Evidence {
+                sourcing: None,
+                relation: None,
+            },
             ItemType::Thesis => ItemAttributes::Thesis,
-            ItemType::Hypothesis => ItemAttributes::Hypothesis,
-            ItemType::Analysis => ItemAttributes::Analysis,
+            ItemType::Hypothesis => ItemAttributes::Hypothesis { assessment: None },
+            ItemType::Analysis => ItemAttributes::Analysis { assessment: None },
             ItemType::Premise => ItemAttributes::Premise,
             ItemType::Question => ItemAttributes::Question,
             ItemType::Block => ItemAttributes::Block,
@@ -931,6 +951,35 @@ impl ItemAttributes {
             _ => &[],
         }
     }
+
+    /// Returns the sourcing field if this is Evidence.
+    #[must_use]
+    pub fn sourcing(&self) -> Option<&str> {
+        match self {
+            Self::Evidence { sourcing, .. } => sourcing.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Returns the evidence relation field if this is Evidence.
+    #[must_use]
+    pub fn evidence_relation(&self) -> Option<&str> {
+        match self {
+            Self::Evidence { relation, .. } => relation.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Returns the assessment field if this is Analysis or Hypothesis.
+    #[must_use]
+    pub fn assessment(&self) -> Option<&str> {
+        match self {
+            Self::Analysis { assessment, .. } | Self::Hypothesis { assessment, .. } => {
+                assessment.as_deref()
+            }
+            _ => None,
+        }
+    }
 }
 
 use crate::model::metadata::SourceLocation;
@@ -965,6 +1014,22 @@ pub struct Item {
     /// Type-specific attributes.
     #[serde(default)]
     pub attributes: ItemAttributes,
+
+    /// Lifecycle state (e.g., open, verified, disproven). SARA reads but does not validate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<String>,
+
+    /// Item's own fingerprint at last review.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reviewed: Option<String>,
+
+    /// Target ID → target fingerprint at last review.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub stamps: HashMap<ItemId, String>,
+
+    /// SHA-256 of body content, computed during parsing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body_hash: Option<String>,
 }
 
 impl Item {
@@ -1003,6 +1068,15 @@ pub struct ItemBuilder {
     status: Option<AdrStatus>,
     deciders: Vec<String>,
     supersedes: Vec<ItemId>,
+    // Investigation attribute fields
+    sourcing: Option<String>,
+    relation: Option<String>,
+    assessment: Option<String>,
+    // Fingerprint/review fields
+    outcome: Option<String>,
+    reviewed: Option<String>,
+    stamps: Option<HashMap<ItemId, String>>,
+    body_hash: Option<String>,
 }
 
 impl ItemBuilder {
@@ -1101,6 +1175,48 @@ impl ItemBuilder {
         self
     }
 
+    /// Sets the sourcing field (for Evidence).
+    pub fn sourcing(mut self, sourcing: String) -> Self {
+        self.sourcing = Some(sourcing);
+        self
+    }
+
+    /// Sets the relation field (for Evidence).
+    pub fn relation(mut self, relation: String) -> Self {
+        self.relation = Some(relation);
+        self
+    }
+
+    /// Sets the assessment field (for Analysis/Hypothesis).
+    pub fn assessment(mut self, assessment: String) -> Self {
+        self.assessment = Some(assessment);
+        self
+    }
+
+    /// Sets the outcome lifecycle state.
+    pub fn outcome(mut self, outcome: String) -> Self {
+        self.outcome = Some(outcome);
+        self
+    }
+
+    /// Sets the reviewed fingerprint.
+    pub fn reviewed(mut self, reviewed: String) -> Self {
+        self.reviewed = Some(reviewed);
+        self
+    }
+
+    /// Sets the stamps map.
+    pub fn stamps(mut self, stamps: HashMap<ItemId, String>) -> Self {
+        self.stamps = Some(stamps);
+        self
+    }
+
+    /// Sets the body hash.
+    pub fn body_hash(mut self, body_hash: String) -> Self {
+        self.body_hash = Some(body_hash);
+        self
+    }
+
     /// Sets the attributes directly.
     pub fn attributes(mut self, attrs: ItemAttributes) -> Self {
         // Extract values from the attributes enum
@@ -1111,13 +1227,17 @@ impl ItemBuilder {
             | ItemAttributes::SoftwareDetailedDesign
             | ItemAttributes::HardwareDetailedDesign
             | ItemAttributes::Entity
-            | ItemAttributes::Evidence
             | ItemAttributes::Thesis
-            | ItemAttributes::Hypothesis
-            | ItemAttributes::Analysis
             | ItemAttributes::Premise
             | ItemAttributes::Question
             | ItemAttributes::Block => {}
+            ItemAttributes::Evidence { sourcing, relation } => {
+                self.sourcing = sourcing;
+                self.relation = relation;
+            }
+            ItemAttributes::Hypothesis { assessment } | ItemAttributes::Analysis { assessment } => {
+                self.assessment = assessment;
+            }
             ItemAttributes::SystemRequirement {
                 specification,
                 depends_on,
@@ -1217,12 +1337,19 @@ impl ItemBuilder {
                 })
             }
 
-            // Investigation types — no required attributes
+            // Investigation types
             ItemType::Entity => Ok(ItemAttributes::Entity),
-            ItemType::Evidence => Ok(ItemAttributes::Evidence),
+            ItemType::Evidence => Ok(ItemAttributes::Evidence {
+                sourcing: self.sourcing.clone(),
+                relation: self.relation.clone(),
+            }),
             ItemType::Thesis => Ok(ItemAttributes::Thesis),
-            ItemType::Hypothesis => Ok(ItemAttributes::Hypothesis),
-            ItemType::Analysis => Ok(ItemAttributes::Analysis),
+            ItemType::Hypothesis => Ok(ItemAttributes::Hypothesis {
+                assessment: self.assessment.clone(),
+            }),
+            ItemType::Analysis => Ok(ItemAttributes::Analysis {
+                assessment: self.assessment.clone(),
+            }),
             ItemType::Premise => Ok(ItemAttributes::Premise),
             ItemType::Question => Ok(ItemAttributes::Question),
             ItemType::Block => Ok(ItemAttributes::Block),
@@ -1286,6 +1413,10 @@ impl ItemBuilder {
             upstream: self.upstream,
             downstream: self.downstream,
             attributes,
+            outcome: self.outcome,
+            reviewed: self.reviewed,
+            stamps: self.stamps.unwrap_or_default(),
+            body_hash: self.body_hash,
         })
     }
 }
@@ -1536,7 +1667,7 @@ mod tests {
         ));
         assert!(matches!(
             ItemAttributes::for_type(ItemType::Evidence),
-            ItemAttributes::Evidence
+            ItemAttributes::Evidence { .. }
         ));
         assert!(matches!(
             ItemAttributes::for_type(ItemType::Thesis),
@@ -1544,7 +1675,96 @@ mod tests {
         ));
         assert!(matches!(
             ItemAttributes::for_type(ItemType::Analysis),
-            ItemAttributes::Analysis
+            ItemAttributes::Analysis { .. }
         ));
+    }
+
+    #[test]
+    fn test_item_outcome_field() {
+        let source = SourceLocation::new(PathBuf::from("/test"), "test.md".to_string());
+        let item = ItemBuilder::new()
+            .id(ItemId::new_unchecked("EVD-001"))
+            .item_type(ItemType::Evidence)
+            .name("Test")
+            .source(source)
+            .outcome("open".to_string())
+            .build()
+            .unwrap();
+        assert_eq!(item.outcome.as_deref(), Some("open"));
+    }
+
+    #[test]
+    fn test_item_stamps_field() {
+        let source = SourceLocation::new(PathBuf::from("/test"), "test.md".to_string());
+        let item = ItemBuilder::new()
+            .id(ItemId::new_unchecked("ANL-001"))
+            .item_type(ItemType::Analysis)
+            .name("Test")
+            .source(source)
+            .stamps(HashMap::from([(
+                ItemId::new_unchecked("EVD-001"),
+                "abcd1234".to_string(),
+            )]))
+            .build()
+            .unwrap();
+        assert_eq!(item.stamps.len(), 1);
+        assert_eq!(
+            item.stamps.get(&ItemId::new_unchecked("EVD-001")).unwrap(),
+            "abcd1234"
+        );
+    }
+
+    #[test]
+    fn test_item_reviewed_field() {
+        let source = SourceLocation::new(PathBuf::from("/test"), "test.md".to_string());
+        let item = ItemBuilder::new()
+            .id(ItemId::new_unchecked("ANL-001"))
+            .item_type(ItemType::Analysis)
+            .name("Test")
+            .source(source)
+            .reviewed("deadbeef".to_string())
+            .build()
+            .unwrap();
+        assert_eq!(item.reviewed.as_deref(), Some("deadbeef"));
+    }
+
+    #[test]
+    fn test_item_body_hash_field() {
+        let source = SourceLocation::new(PathBuf::from("/test"), "test.md".to_string());
+        let item = ItemBuilder::new()
+            .id(ItemId::new_unchecked("EVD-001"))
+            .item_type(ItemType::Evidence)
+            .name("Test")
+            .source(source)
+            .body_hash("abc123".to_string())
+            .build()
+            .unwrap();
+        assert_eq!(item.body_hash.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn test_evidence_attributes_with_fields() {
+        let attrs = ItemAttributes::Evidence {
+            sourcing: Some("C".to_string()),
+            relation: Some("hosted".to_string()),
+        };
+        assert_eq!(attrs.sourcing(), Some("C"));
+        assert_eq!(attrs.evidence_relation(), Some("hosted"));
+    }
+
+    #[test]
+    fn test_analysis_attributes_with_assessment() {
+        let attrs = ItemAttributes::Analysis {
+            assessment: Some("very-likely".to_string()),
+        };
+        assert_eq!(attrs.assessment(), Some("very-likely"));
+    }
+
+    #[test]
+    fn test_hypothesis_attributes_with_assessment() {
+        let attrs = ItemAttributes::Hypothesis {
+            assessment: Some("roughly-even".to_string()),
+        };
+        assert_eq!(attrs.assessment(), Some("roughly-even"));
     }
 }
