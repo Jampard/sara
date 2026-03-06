@@ -40,6 +40,25 @@
       forAllSystems = lib.genAttrs systems;
     in
     {
+      packages = forAllSystems (
+        system:
+        let
+          pkgs = import nixpkgs { inherit system; };
+        in
+        {
+          default = pkgs.rustPlatform.buildRustPackage {
+            pname = "sara";
+            version = "0.5.3";
+            src = lib.cleanSource ./.;
+            cargoLock.lockFile = ./Cargo.lock;
+            nativeBuildInputs = [ pkgs.pkg-config ];
+            buildInputs = [ pkgs.openssl ];
+            env.OPENSSL_NO_VENDOR = "1";
+            checkFlags = [ "--skip=repository::git::tests::test_is_git_repo" ];
+          };
+        }
+      );
+
       devShells = forAllSystems (
         system:
         let
