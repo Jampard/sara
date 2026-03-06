@@ -403,4 +403,31 @@ mod tests {
         assert_eq!(report.error_count(), 1, "Should detect one invalid item");
         assert_eq!(report.warning_count(), 0);
     }
+
+    #[test]
+    fn test_suspect_links_detected_for_unstamped_items() {
+        // Build an entity and evidence with upstream ref but no stamps
+        let entity = create_test_item("ITM-001", ItemType::Entity);
+        let evidence = create_test_item_with_upstream(
+            "EVD-001",
+            ItemType::Evidence,
+            UpstreamRefs {
+                parent: vec![ItemId::new_unchecked("ITM-001")],
+                ..Default::default()
+            },
+        );
+
+        let graph = KnowledgeGraphBuilder::new()
+            .add_item(entity)
+            .add_item(evidence)
+            .build()
+            .unwrap();
+
+        let report = validate(&graph, false);
+        // Should have suspect link warnings for unstamped relations
+        assert!(
+            report.warning_count() > 0,
+            "Expected suspect link warnings for unstamped items"
+        );
+    }
 }
