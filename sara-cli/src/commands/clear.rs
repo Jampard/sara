@@ -45,6 +45,17 @@ pub fn run(args: &ClearArgs, ctx: &CommandContext) -> Result<ExitCode, Box<dyn E
         return Ok(ExitCode::FAILURE);
     };
 
+    if !item.upstream.all_ids().any(|id| id == &target_id) {
+        print_error(
+            &ctx.output,
+            &format!(
+                "'{}' is not an upstream reference of '{}'",
+                args.target_id, args.item_id
+            ),
+        );
+        return Ok(ExitCode::FAILURE);
+    }
+
     let target_fp = compute_item_fingerprint(target);
     let target_fp_short = truncate_fingerprint(&target_fp).to_string();
 
@@ -52,7 +63,7 @@ pub fn run(args: &ClearArgs, ctx: &CommandContext) -> Result<ExitCode, Box<dyn E
     let file_path = item.source.full_path();
     let content = fs::read_to_string(&file_path)?;
 
-    let updated = apply_stamp(&content, &args.target_id, &target_fp_short)
+    let updated = apply_stamp(&content, &args.target_id, &target_fp_short, &file_path)
         .map_err(|e| format!("Failed to update frontmatter: {e}"))?;
     fs::write(&file_path, updated)?;
 

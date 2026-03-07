@@ -68,7 +68,7 @@ pub fn compute_item_fingerprint(item: &Item) -> String {
 pub fn fingerprinted_fields(item_type: ItemType) -> &'static [&'static str] {
     match item_type {
         ItemType::Evidence => &["relation", "sourcing"],
-        ItemType::Analysis => &["assessment"],
+        ItemType::Analysis | ItemType::Hypothesis => &["assessment"],
         _ => &[],
     }
 }
@@ -148,6 +148,12 @@ mod tests {
     #[test]
     fn test_fingerprinted_fields_analysis() {
         let fields = fingerprinted_fields(ItemType::Analysis);
+        assert!(fields.contains(&"assessment"));
+    }
+
+    #[test]
+    fn test_fingerprinted_fields_hypothesis() {
+        let fields = fingerprinted_fields(ItemType::Hypothesis);
         assert!(fields.contains(&"assessment"));
     }
 

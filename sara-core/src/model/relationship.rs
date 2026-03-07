@@ -485,29 +485,116 @@ impl RelationshipRules {
             | RelationshipType::IsRequiredBy
             | RelationshipType::Supersedes
             | RelationshipType::IsSupersededBy => Self::valid_peer_for(from_type) == Some(to_type),
-            // Investigation relationships — validated via traceability_configs, allow all for now
-            RelationshipType::Parent
-            | RelationshipType::Children
-            | RelationshipType::Cites
-            | RelationshipType::CitedBy
-            | RelationshipType::Evaluates
-            | RelationshipType::EvaluatedBy
-            | RelationshipType::InvestigationPremises
-            | RelationshipType::PremiseOf
-            | RelationshipType::InvestigationGaps
-            | RelationshipType::GapOf
-            | RelationshipType::EstablishedBy
-            | RelationshipType::Establishes
-            | RelationshipType::RaisedBy
-            | RelationshipType::Raises
-            | RelationshipType::Affects
-            | RelationshipType::AffectedBy
-            | RelationshipType::InvestigationHypotheses
-            | RelationshipType::HypothesisOf
-            | RelationshipType::InvestigationAnalyses
-            | RelationshipType::AnalysisOf
-            | RelationshipType::Participant
-            | RelationshipType::ParticipantOf => true,
+            // Investigation relationships — validated per-type
+            RelationshipType::Parent => matches!(
+                (from_type, to_type),
+                (
+                    ItemType::Evidence
+                        | ItemType::Hypothesis
+                        | ItemType::Analysis
+                        | ItemType::Question,
+                    ItemType::Entity | ItemType::Thesis
+                )
+            ),
+            RelationshipType::Children => matches!(
+                (from_type, to_type),
+                (
+                    ItemType::Entity | ItemType::Thesis,
+                    ItemType::Evidence
+                        | ItemType::Hypothesis
+                        | ItemType::Analysis
+                        | ItemType::Question
+                )
+            ),
+            RelationshipType::Cites => {
+                matches!(
+                    (from_type, to_type),
+                    (ItemType::Analysis, ItemType::Evidence)
+                )
+            }
+            RelationshipType::CitedBy => {
+                matches!(
+                    (from_type, to_type),
+                    (ItemType::Evidence, ItemType::Analysis)
+                )
+            }
+            RelationshipType::Evaluates => matches!(
+                (from_type, to_type),
+                (ItemType::Analysis, ItemType::Hypothesis)
+            ),
+            RelationshipType::EvaluatedBy => matches!(
+                (from_type, to_type),
+                (ItemType::Hypothesis, ItemType::Analysis)
+            ),
+            RelationshipType::EstablishedBy => {
+                matches!((from_type, to_type), (ItemType::Premise, ItemType::Thesis))
+            }
+            RelationshipType::Establishes => {
+                matches!((from_type, to_type), (ItemType::Thesis, ItemType::Premise))
+            }
+            RelationshipType::RaisedBy => matches!(
+                (from_type, to_type),
+                (ItemType::Question, ItemType::Analysis | ItemType::Evidence)
+            ),
+            RelationshipType::Raises => matches!(
+                (from_type, to_type),
+                (ItemType::Analysis | ItemType::Evidence, ItemType::Question)
+            ),
+            RelationshipType::InvestigationPremises => {
+                matches!(
+                    (from_type, to_type),
+                    (ItemType::Analysis, ItemType::Premise)
+                )
+            }
+            RelationshipType::PremiseOf => {
+                matches!(
+                    (from_type, to_type),
+                    (ItemType::Premise, ItemType::Analysis)
+                )
+            }
+            RelationshipType::InvestigationGaps => {
+                matches!(
+                    (from_type, to_type),
+                    (ItemType::Analysis, ItemType::Question)
+                )
+            }
+            RelationshipType::GapOf => {
+                matches!(
+                    (from_type, to_type),
+                    (ItemType::Question, ItemType::Analysis)
+                )
+            }
+            RelationshipType::InvestigationHypotheses => matches!(
+                (from_type, to_type),
+                (ItemType::Thesis, ItemType::Hypothesis)
+            ),
+            RelationshipType::HypothesisOf => matches!(
+                (from_type, to_type),
+                (ItemType::Hypothesis, ItemType::Thesis)
+            ),
+            RelationshipType::InvestigationAnalyses => {
+                matches!((from_type, to_type), (ItemType::Thesis, ItemType::Analysis))
+            }
+            RelationshipType::AnalysisOf => {
+                matches!((from_type, to_type), (ItemType::Analysis, ItemType::Thesis))
+            }
+            RelationshipType::Affects => matches!(
+                (from_type, to_type),
+                (
+                    ItemType::Block,
+                    ItemType::Evidence | ItemType::Analysis | ItemType::Question
+                )
+            ),
+            RelationshipType::AffectedBy => matches!(
+                (from_type, to_type),
+                (
+                    ItemType::Evidence | ItemType::Analysis | ItemType::Question,
+                    ItemType::Block
+                )
+            ),
+            // Participant is permissive: any item can reference an Entity
+            RelationshipType::Participant => matches!(to_type, ItemType::Entity),
+            RelationshipType::ParticipantOf => matches!(from_type, ItemType::Entity),
         }
     }
 }
@@ -753,6 +840,58 @@ mod tests {
             RelationshipType::InvestigationPremises.field_name(),
             FieldName::InvestigationPremises
         );
+    }
+
+    #[test]
+    fn test_investigation_relationship_type_validation() {
+        // Valid: Analysis → Evidence via Cites
+        assert!(RelationshipRules::is_valid_relationship(
+            ItemType::Analysis,
+            ItemType::Evidence,
+            RelationshipType::Cites
+        ));
+
+        // Invalid: Analysis → Analysis via Parent (wrong target type)
+        assert!(!RelationshipRules::is_valid_relationship(
+            ItemType::Analysis,
+            ItemType::Analysis,
+            RelationshipType::Parent
+        ));
+
+        // Invalid: Evidence → Evidence via Cites (wrong source type)
+        assert!(!RelationshipRules::is_valid_relationship(
+            ItemType::Evidence,
+            ItemType::Evidence,
+            RelationshipType::Cites
+        ));
+
+        // Valid: Block → Evidence via Affects
+        assert!(RelationshipRules::is_valid_relationship(
+            ItemType::Block,
+            ItemType::Evidence,
+            RelationshipType::Affects
+        ));
+
+        // Invalid: Analysis → Evidence via Affects (wrong source)
+        assert!(!RelationshipRules::is_valid_relationship(
+            ItemType::Analysis,
+            ItemType::Evidence,
+            RelationshipType::Affects
+        ));
+
+        // Valid: Participant (any → Entity)
+        assert!(RelationshipRules::is_valid_relationship(
+            ItemType::Analysis,
+            ItemType::Entity,
+            RelationshipType::Participant
+        ));
+
+        // Invalid: Participant to non-Entity
+        assert!(!RelationshipRules::is_valid_relationship(
+            ItemType::Analysis,
+            ItemType::Thesis,
+            RelationshipType::Participant
+        ));
     }
 
     #[test]

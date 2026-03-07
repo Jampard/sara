@@ -55,7 +55,7 @@ pub fn run(args: &ReviewArgs, ctx: &CommandContext) -> Result<ExitCode, Box<dyn 
     let file_path = item.source.full_path();
     let content = fs::read_to_string(&file_path)?;
 
-    let updated = apply_review(&content, &own_fp_short, &stamps)
+    let updated = apply_review(&content, &own_fp_short, &stamps, &file_path)
         .map_err(|e| format!("Failed to update frontmatter: {e}"))?;
     fs::write(&file_path, updated)?;
 

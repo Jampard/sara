@@ -65,6 +65,146 @@ impl ValidationRule for RedundantRelationshipsRule {
                 &mut seen_pairs,
                 &mut errors,
             );
+
+            // Investigation: children <-> parent
+            check_redundant_pair(
+                item,
+                graph,
+                &item.downstream.children,
+                |target| target.upstream.parent.contains(&item.id),
+                &RelationshipPair {
+                    from_rel: RelationshipType::Children,
+                    to_rel: RelationshipType::Parent,
+                },
+                &mut seen_pairs,
+                &mut errors,
+            );
+
+            // Investigation: cited_by <-> cites
+            check_redundant_pair(
+                item,
+                graph,
+                &item.downstream.cited_by,
+                |target| target.upstream.cites.contains(&item.id),
+                &RelationshipPair {
+                    from_rel: RelationshipType::CitedBy,
+                    to_rel: RelationshipType::Cites,
+                },
+                &mut seen_pairs,
+                &mut errors,
+            );
+
+            // Investigation: evaluated_by <-> evaluates
+            check_redundant_pair(
+                item,
+                graph,
+                &item.downstream.evaluated_by,
+                |target| target.upstream.evaluates.contains(&item.id),
+                &RelationshipPair {
+                    from_rel: RelationshipType::EvaluatedBy,
+                    to_rel: RelationshipType::Evaluates,
+                },
+                &mut seen_pairs,
+                &mut errors,
+            );
+
+            // Investigation: establishes <-> established_by
+            check_redundant_pair(
+                item,
+                graph,
+                &item.downstream.establishes,
+                |target| target.upstream.established_by.contains(&item.id),
+                &RelationshipPair {
+                    from_rel: RelationshipType::Establishes,
+                    to_rel: RelationshipType::EstablishedBy,
+                },
+                &mut seen_pairs,
+                &mut errors,
+            );
+
+            // Investigation: raises <-> raised_by
+            check_redundant_pair(
+                item,
+                graph,
+                &item.downstream.raises,
+                |target| target.upstream.raised_by.contains(&item.id),
+                &RelationshipPair {
+                    from_rel: RelationshipType::Raises,
+                    to_rel: RelationshipType::RaisedBy,
+                },
+                &mut seen_pairs,
+                &mut errors,
+            );
+
+            // Investigation: premises <-> premise_of
+            check_redundant_pair(
+                item,
+                graph,
+                &item.downstream.premises,
+                |target| target.upstream.premise_of.contains(&item.id),
+                &RelationshipPair {
+                    from_rel: RelationshipType::InvestigationPremises,
+                    to_rel: RelationshipType::PremiseOf,
+                },
+                &mut seen_pairs,
+                &mut errors,
+            );
+
+            // Investigation: gaps <-> gap_of
+            check_redundant_pair(
+                item,
+                graph,
+                &item.downstream.gaps,
+                |target| target.upstream.gap_of.contains(&item.id),
+                &RelationshipPair {
+                    from_rel: RelationshipType::InvestigationGaps,
+                    to_rel: RelationshipType::GapOf,
+                },
+                &mut seen_pairs,
+                &mut errors,
+            );
+
+            // Investigation: hypotheses <-> hypothesis_of
+            check_redundant_pair(
+                item,
+                graph,
+                &item.downstream.hypotheses,
+                |target| target.upstream.hypothesis_of.contains(&item.id),
+                &RelationshipPair {
+                    from_rel: RelationshipType::InvestigationHypotheses,
+                    to_rel: RelationshipType::HypothesisOf,
+                },
+                &mut seen_pairs,
+                &mut errors,
+            );
+
+            // Investigation: analyses <-> analysis_of
+            check_redundant_pair(
+                item,
+                graph,
+                &item.downstream.analyses,
+                |target| target.upstream.analysis_of.contains(&item.id),
+                &RelationshipPair {
+                    from_rel: RelationshipType::InvestigationAnalyses,
+                    to_rel: RelationshipType::AnalysisOf,
+                },
+                &mut seen_pairs,
+                &mut errors,
+            );
+
+            // Investigation: affected_by <-> affects
+            check_redundant_pair(
+                item,
+                graph,
+                &item.downstream.affected_by,
+                |target| target.upstream.affects.contains(&item.id),
+                &RelationshipPair {
+                    from_rel: RelationshipType::AffectedBy,
+                    to_rel: RelationshipType::Affects,
+                },
+                &mut seen_pairs,
+                &mut errors,
+            );
         }
 
         errors
@@ -152,6 +292,81 @@ mod tests {
         let rule = RedundantRelationshipsRule;
         let warnings = rule.validate(&graph, &ValidationConfig::default());
         assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn test_no_investigation_redundancy() {
+        // THS-001 declares hypotheses: [HYP-001] (downstream)
+        // HYP-001 declares parent: [THS-001] (upstream, different rel type)
+        // This is NOT redundant — children↔parent would be, but hypotheses↔parent is not
+        let thesis = create_test_item_with_refs(
+            "THS-001",
+            ItemType::Thesis,
+            UpstreamRefs::default(),
+            DownstreamRefs {
+                hypotheses: vec![ItemId::new_unchecked("HYP-001")],
+                ..Default::default()
+            },
+        );
+        let hypothesis = create_test_item_with_upstream(
+            "HYP-001",
+            ItemType::Hypothesis,
+            UpstreamRefs {
+                parent: vec![ItemId::new_unchecked("THS-001")],
+                ..Default::default()
+            },
+        );
+
+        let graph = KnowledgeGraphBuilder::new()
+            .add_item(thesis)
+            .add_item(hypothesis)
+            .build()
+            .unwrap();
+
+        let rule = RedundantRelationshipsRule;
+        let warnings = rule.validate(&graph, &ValidationConfig::default());
+        assert!(
+            warnings.is_empty(),
+            "Different relationship types should not be flagged as redundant"
+        );
+    }
+
+    #[test]
+    fn test_redundant_children_parent() {
+        // Entity declares children: [EVD-001] AND Evidence declares parent: [ITM-001]
+        // This IS redundant — both sides declare the same relationship
+        let entity = create_test_item_with_refs(
+            "ITM-001",
+            ItemType::Entity,
+            UpstreamRefs::default(),
+            DownstreamRefs {
+                children: vec![ItemId::new_unchecked("EVD-001")],
+                ..Default::default()
+            },
+        );
+        let evidence = create_test_item_with_upstream(
+            "EVD-001",
+            ItemType::Evidence,
+            UpstreamRefs {
+                parent: vec![ItemId::new_unchecked("ITM-001")],
+                ..Default::default()
+            },
+        );
+
+        let graph = KnowledgeGraphBuilder::new()
+            .add_item(entity)
+            .add_item(evidence)
+            .build()
+            .unwrap();
+
+        let rule = RedundantRelationshipsRule;
+        let warnings = rule.validate(&graph, &ValidationConfig::default());
+        assert_eq!(warnings.len(), 1);
+        assert!(matches!(
+            &warnings[0],
+            ValidationError::RedundantRelationship { from_rel, to_rel, .. }
+            if *from_rel == RelationshipType::Children && *to_rel == RelationshipType::Parent
+        ));
     }
 
     #[test]

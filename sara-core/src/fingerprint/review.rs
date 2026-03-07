@@ -1,5 +1,7 @@
 //! Frontmatter update helpers for review and stamp operations.
 
+use std::path::Path;
+
 use serde_yaml::Value;
 
 use crate::parser::{extract_frontmatter, update_frontmatter};
@@ -12,9 +14,9 @@ pub fn apply_review(
     content: &str,
     reviewed: &str,
     stamps: &[(String, String)],
+    file_path: &Path,
 ) -> Result<String, String> {
-    let extracted =
-        extract_frontmatter(content, std::path::Path::new("review")).map_err(|e| e.to_string())?;
+    let extracted = extract_frontmatter(content, file_path).map_err(|e| e.to_string())?;
 
     let mut yaml: Value =
         serde_yaml::from_str(&extracted.yaml).map_err(|e| format!("YAML parse error: {e}"))?;
@@ -42,6 +44,8 @@ pub fn apply_review(
             Value::String("stamps".to_string()),
             Value::Mapping(stamps_map),
         );
+    } else {
+        map.remove("stamps");
     }
 
     let new_yaml =
@@ -53,9 +57,13 @@ pub fn apply_review(
 ///
 /// Parses existing YAML frontmatter, updates the stamp for the given target ID,
 /// then reconstructs the file with the updated frontmatter.
-pub fn apply_stamp(content: &str, target_id: &str, stamp: &str) -> Result<String, String> {
-    let extracted =
-        extract_frontmatter(content, std::path::Path::new("clear")).map_err(|e| e.to_string())?;
+pub fn apply_stamp(
+    content: &str,
+    target_id: &str,
+    stamp: &str,
+    file_path: &Path,
+) -> Result<String, String> {
+    let extracted = extract_frontmatter(content, file_path).map_err(|e| e.to_string())?;
 
     let mut yaml: Value =
         serde_yaml::from_str(&extracted.yaml).map_err(|e| format!("YAML parse error: {e}"))?;
@@ -94,6 +102,7 @@ mod tests {
             content,
             "abcd1234",
             &[("ITM-001".into(), "ef567890".into())],
+            Path::new("EVD-001.md"),
         )
         .unwrap();
 
@@ -109,7 +118,7 @@ mod tests {
     fn test_apply_review_preserves_existing_fields() {
         let content =
             "---\nid: \"EVD-001\"\ntype: evidence\nname: \"Test\"\noutcome: open\n---\nBody.\n";
-        let result = apply_review(content, "abcd1234", &[]).unwrap();
+        let result = apply_review(content, "abcd1234", &[], Path::new("EVD-001.md")).unwrap();
 
         assert!(result.contains("id:"));
         assert!(result.contains("EVD-001"));
@@ -119,9 +128,23 @@ mod tests {
     }
 
     #[test]
+    fn test_apply_review_removes_stamps_when_empty() {
+        let content =
+            "---\nid: \"EVD-001\"\ntype: evidence\nstamps:\n  ITM-001: oldstamp\n---\nBody.\n";
+        let result = apply_review(content, "abcd1234", &[], Path::new("EVD-001.md")).unwrap();
+
+        assert!(result.contains("reviewed:"));
+        assert!(
+            !result.contains("stamps:"),
+            "stamps key should be removed when list is empty"
+        );
+        assert!(!result.contains("oldstamp"));
+    }
+
+    #[test]
     fn test_apply_stamp_adds_single_stamp() {
         let content = "---\nid: \"EVD-001\"\ntype: evidence\n---\nBody.\n";
-        let result = apply_stamp(content, "ITM-001", "abcd1234").unwrap();
+        let result = apply_stamp(content, "ITM-001", "abcd1234", Path::new("EVD-001.md")).unwrap();
 
         assert!(result.contains("stamps:"));
         assert!(result.contains("ITM-001"));
@@ -132,7 +155,7 @@ mod tests {
     fn test_apply_stamp_updates_existing_stamp() {
         let content =
             "---\nid: \"EVD-001\"\ntype: evidence\nstamps:\n  ITM-001: oldstamp\n---\nBody.\n";
-        let result = apply_stamp(content, "ITM-001", "newstamp").unwrap();
+        let result = apply_stamp(content, "ITM-001", "newstamp", Path::new("EVD-001.md")).unwrap();
 
         assert!(result.contains("newstamp"));
         assert!(!result.contains("oldstamp"));

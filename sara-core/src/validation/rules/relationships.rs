@@ -109,6 +109,87 @@ fn validate_item_relationships(graph: &KnowledgeGraph, item: &Item) -> Vec<Valid
         &mut errors,
     );
 
+    // Check investigation upstream references
+    check_references(
+        item,
+        graph,
+        item.upstream.parent.iter(),
+        RelationshipType::Parent,
+        &mut errors,
+    );
+    check_references(
+        item,
+        graph,
+        item.upstream.cites.iter(),
+        RelationshipType::Cites,
+        &mut errors,
+    );
+    check_references(
+        item,
+        graph,
+        item.upstream.evaluates.iter(),
+        RelationshipType::Evaluates,
+        &mut errors,
+    );
+    check_references(
+        item,
+        graph,
+        item.upstream.established_by.iter(),
+        RelationshipType::EstablishedBy,
+        &mut errors,
+    );
+    check_references(
+        item,
+        graph,
+        item.upstream.raised_by.iter(),
+        RelationshipType::RaisedBy,
+        &mut errors,
+    );
+    check_references(
+        item,
+        graph,
+        item.upstream.affects.iter(),
+        RelationshipType::Affects,
+        &mut errors,
+    );
+
+    // Check investigation downstream references
+    check_references(
+        item,
+        graph,
+        item.downstream.children.iter(),
+        RelationshipType::Children,
+        &mut errors,
+    );
+    check_references(
+        item,
+        graph,
+        item.downstream.premises.iter(),
+        RelationshipType::InvestigationPremises,
+        &mut errors,
+    );
+    check_references(
+        item,
+        graph,
+        item.downstream.gaps.iter(),
+        RelationshipType::InvestigationGaps,
+        &mut errors,
+    );
+    check_references(
+        item,
+        graph,
+        item.downstream.hypotheses.iter(),
+        RelationshipType::InvestigationHypotheses,
+        &mut errors,
+    );
+    check_references(
+        item,
+        graph,
+        item.downstream.analyses.iter(),
+        RelationshipType::InvestigationAnalyses,
+        &mut errors,
+    );
+
     errors
 }
 
@@ -116,7 +197,7 @@ fn validate_item_relationships(graph: &KnowledgeGraph, item: &Item) -> Vec<Valid
 mod tests {
     use super::*;
     use crate::graph::KnowledgeGraphBuilder;
-    use crate::model::{DownstreamRefs, ItemId, ItemType, UpstreamRefs};
+    use crate::model::{DownstreamRefs, ItemId, ItemType, RelationshipType, UpstreamRefs};
     use crate::test_utils::{
         create_test_item, create_test_item_with_refs, create_test_item_with_upstream,
     };
@@ -177,6 +258,58 @@ mod tests {
         } else {
             panic!("Expected InvalidRelationship error");
         }
+    }
+
+    #[test]
+    fn test_invalid_investigation_relationship() {
+        // Analysis with parent → Analysis (invalid: parent target must be Entity or Thesis)
+        let graph = KnowledgeGraphBuilder::new()
+            .add_item(create_test_item("ANL-001", ItemType::Analysis))
+            .add_item(create_test_item_with_upstream(
+                "ANL-002",
+                ItemType::Analysis,
+                UpstreamRefs {
+                    parent: vec![ItemId::new_unchecked("ANL-001")],
+                    ..Default::default()
+                },
+            ))
+            .build()
+            .unwrap();
+
+        let rule = RelationshipsRule;
+        let errors = rule.validate(&graph, &ValidationConfig::default());
+        assert_eq!(errors.len(), 1);
+        if let ValidationError::InvalidRelationship {
+            from_type,
+            to_type,
+            rel_type,
+            ..
+        } = &errors[0]
+        {
+            assert_eq!(*from_type, ItemType::Analysis);
+            assert_eq!(*to_type, ItemType::Analysis);
+            assert_eq!(*rel_type, RelationshipType::Parent);
+        } else {
+            panic!("Expected InvalidRelationship error");
+        }
+    }
+
+    #[test]
+    fn test_valid_investigation_hierarchy() {
+        use crate::test_utils::create_investigation_hierarchy;
+
+        let items = create_investigation_hierarchy();
+        let graph = KnowledgeGraphBuilder::new()
+            .add_items(items)
+            .build()
+            .unwrap();
+
+        let rule = RelationshipsRule;
+        let errors = rule.validate(&graph, &ValidationConfig::default());
+        assert!(
+            errors.is_empty(),
+            "Valid investigation hierarchy should not produce errors: {errors:?}"
+        );
     }
 
     #[test]
