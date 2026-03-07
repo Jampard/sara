@@ -32,5 +32,9 @@ Thumbs.db
 tarpaulin-report.html
 coverage/
 
+# Nix
+.direnv/
+result
+
 # Misc
 sara.toml
