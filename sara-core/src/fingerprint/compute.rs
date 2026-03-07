@@ -41,7 +41,21 @@ pub fn compute_fingerprint(
 /// This allows fingerprint computation without file access.
 pub fn compute_item_fingerprint(item: &Item) -> String {
     let body = item.body_hash.as_deref().unwrap_or("");
-    let type_fields = collect_type_fields(item);
+    let mut type_fields = collect_type_fields(item);
+
+    // Include participants (sorted for determinism)
+    let participants_str;
+    if !item.participants.is_empty() {
+        let mut parts: Vec<String> = item
+            .participants
+            .iter()
+            .map(|p| format!("{}:{}", p.entity, p.role))
+            .collect();
+        parts.sort();
+        participants_str = parts.join(",");
+        type_fields.push(("participants", &participants_str));
+    }
+
     compute_fingerprint(
         item.id.as_str(),
         body,

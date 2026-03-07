@@ -60,7 +60,11 @@ impl CoverageReport {
 
         // Calculate coverage for each item type
         for item_type in ItemType::all() {
-            let items = graph.items_by_type(*item_type);
+            let all_items = graph.items_by_type(*item_type);
+            let items: Vec<_> = all_items
+                .into_iter()
+                .filter(|item| item.normative)
+                .collect();
             let total = items.len();
 
             if total == 0 {

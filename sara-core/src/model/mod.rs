@@ -9,7 +9,7 @@ mod relationship;
 pub use edit::{EditSummary, EditUpdates, FieldChange, TraceabilityLinks};
 pub use field::FieldName;
 pub use item::{
-    AdrStatus, DownstreamRefs, Item, ItemAttributes, ItemBuilder, ItemId, ItemType,
+    AdrStatus, DownstreamRefs, Item, ItemAttributes, ItemBuilder, ItemId, ItemType, Participant,
     TraceabilityConfig, UpstreamRefs,
 };
 pub use metadata::SourceLocation;

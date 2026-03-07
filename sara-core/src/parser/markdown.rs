@@ -8,7 +8,8 @@ use sha2::{Digest, Sha256};
 
 use crate::error::ParseError;
 use crate::model::{
-    AdrStatus, DownstreamRefs, Item, ItemBuilder, ItemId, ItemType, SourceLocation, UpstreamRefs,
+    AdrStatus, DownstreamRefs, Item, ItemBuilder, ItemId, ItemType, Participant, SourceLocation,
+    UpstreamRefs,
 };
 use crate::parser::frontmatter::extract_frontmatter;
 
@@ -144,6 +145,26 @@ pub struct RawFrontmatter {
     pub reviewed: Option<String>,
     #[serde(default)]
     pub stamps: HashMap<String, String>,
+
+    // Per-item flags
+    #[serde(default)]
+    pub derived: bool,
+    #[serde(default = "default_normative")]
+    pub normative: bool,
+
+    // N-ary participants
+    #[serde(default)]
+    pub participants: Vec<RawParticipant>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RawParticipant {
+    pub entity: String,
+    pub role: String,
+}
+
+fn default_normative() -> bool {
+    true
 }
 
 impl RawFrontmatter {
@@ -329,6 +350,27 @@ pub fn parse_markdown_file(
             .map(|(k, v)| (ItemId::new_unchecked(k), v.clone()))
             .collect();
         builder = builder.stamps(stamps);
+    }
+
+    // Set per-item flags
+    if frontmatter.derived {
+        builder = builder.derived(true);
+    }
+    if !frontmatter.normative {
+        builder = builder.normative(false);
+    }
+
+    // Set participants
+    if !frontmatter.participants.is_empty() {
+        let participants = frontmatter
+            .participants
+            .iter()
+            .map(|p| Participant {
+                entity: ItemId::new_unchecked(&p.entity),
+                role: p.role.clone(),
+            })
+            .collect();
+        builder = builder.participants(participants);
     }
 
     // Compute body_hash from body content

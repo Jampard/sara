@@ -65,6 +65,10 @@ pub enum FieldName {
     // Investigation peer fields
     Affects,
     AffectedBy,
+
+    // Participant fields
+    Participants,
+    ParticipantOf,
 }
 
 impl FieldName {
@@ -111,6 +115,8 @@ impl FieldName {
             Self::InvestigationAnalyses,
             Self::Affects,
             Self::AffectedBy,
+            Self::Participants,
+            Self::ParticipantOf,
         ]
     }
 
@@ -159,6 +165,8 @@ impl FieldName {
             Self::InvestigationAnalyses => "analyses",
             Self::Affects => "affects",
             Self::AffectedBy => "affected_by",
+            Self::Participants => "participants",
+            Self::ParticipantOf => "participant_of",
         }
     }
 
@@ -207,6 +215,8 @@ impl FieldName {
             Self::InvestigationAnalyses => "Analyses",
             Self::Affects => "Affects",
             Self::AffectedBy => "Affected by",
+            Self::Participants => "Participants",
+            Self::ParticipantOf => "Participant of",
         }
     }
 
@@ -227,6 +237,7 @@ impl FieldName {
                 | Self::GapOf
                 | Self::HypothesisOf
                 | Self::AnalysisOf
+                | Self::Participants
         )
     }
 
@@ -247,6 +258,7 @@ impl FieldName {
                 | Self::InvestigationGaps
                 | Self::InvestigationHypotheses
                 | Self::InvestigationAnalyses
+                | Self::ParticipantOf
         )
     }
 
@@ -311,7 +323,7 @@ mod tests {
         assert!(all.contains(&FieldName::Specification));
         assert!(all.contains(&FieldName::Status));
         assert!(all.contains(&FieldName::Justifies));
-        assert_eq!(all.len(), 40);
+        assert_eq!(all.len(), 42);
     }
 
     #[test]

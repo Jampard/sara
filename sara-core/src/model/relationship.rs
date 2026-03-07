@@ -75,6 +75,11 @@ pub enum RelationshipType {
     InvestigationAnalyses,
     /// Inverse of Analyses.
     AnalysisOf,
+
+    /// N-ary participant reference (item → entity).
+    Participant,
+    /// Inverse of Participant.
+    ParticipantOf,
 }
 
 impl RelationshipType {
@@ -114,6 +119,8 @@ impl RelationshipType {
             Self::HypothesisOf => Self::InvestigationHypotheses,
             Self::InvestigationAnalyses => Self::AnalysisOf,
             Self::AnalysisOf => Self::InvestigationAnalyses,
+            Self::Participant => Self::ParticipantOf,
+            Self::ParticipantOf => Self::Participant,
         }
     }
 
@@ -136,6 +143,7 @@ impl RelationshipType {
                 | Self::GapOf
                 | Self::HypothesisOf
                 | Self::AnalysisOf
+                | Self::Participant
         )
     }
 
@@ -157,6 +165,7 @@ impl RelationshipType {
                 | Self::InvestigationGaps
                 | Self::InvestigationHypotheses
                 | Self::InvestigationAnalyses
+                | Self::ParticipantOf
         )
     }
 
@@ -202,6 +211,7 @@ impl RelationshipType {
                 | Self::InvestigationHypotheses
                 | Self::InvestigationAnalyses
                 | Self::Affects
+                | Self::Participant
         )
     }
 
@@ -241,6 +251,8 @@ impl RelationshipType {
             Self::HypothesisOf => FieldName::HypothesisOf,
             Self::InvestigationAnalyses => FieldName::InvestigationAnalyses,
             Self::AnalysisOf => FieldName::AnalysisOf,
+            Self::Participant => FieldName::Participants,
+            Self::ParticipantOf => FieldName::ParticipantOf,
         }
     }
 }
@@ -493,7 +505,9 @@ impl RelationshipRules {
             | RelationshipType::InvestigationHypotheses
             | RelationshipType::HypothesisOf
             | RelationshipType::InvestigationAnalyses
-            | RelationshipType::AnalysisOf => true,
+            | RelationshipType::AnalysisOf
+            | RelationshipType::Participant
+            | RelationshipType::ParticipantOf => true,
         }
     }
 }

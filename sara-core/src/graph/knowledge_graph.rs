@@ -129,7 +129,8 @@ impl KnowledgeGraph {
             .node_weights()
             .filter(|item| {
                 // Solutions are allowed to have no parents (root of hierarchy)
-                if item.item_type.is_root() {
+                // Derived items are auto-generated; suppress orphan warnings
+                if item.item_type.is_root() || item.derived {
                     return false;
                 }
                 // Check if item has any upstream references
@@ -331,6 +332,16 @@ impl KnowledgeGraphBuilder {
         for target_id in &item.upstream.affects {
             graph.add_relationship(&item.id, target_id, RelationshipType::Affects);
             graph.add_relationship(target_id, &item.id, RelationshipType::AffectedBy);
+        }
+
+        // N-ary participant relationships
+        for participant in &item.participants {
+            graph.add_relationship(&item.id, &participant.entity, RelationshipType::Participant);
+            graph.add_relationship(
+                &participant.entity,
+                &item.id,
+                RelationshipType::ParticipantOf,
+            );
         }
     }
 }

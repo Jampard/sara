@@ -9,7 +9,7 @@ use crate::validation::report::{ValidationReport, ValidationReportBuilder};
 use crate::validation::rule::{Severity, ValidationRule};
 use crate::validation::rules::{
     BrokenReferencesRule, CyclesRule, DuplicatesRule, MetadataRule, OrphansRule,
-    RedundantRelationshipsRule, RelationshipsRule, SuspectLinksRule,
+    RedundantRelationshipsRule, RelationshipsRule, SuspectLinksRule, UnreviewedItemsRule,
 };
 
 /// All validation rules.
@@ -22,6 +22,7 @@ static RULES: &[&dyn ValidationRule] = &[
     &RedundantRelationshipsRule,
     &OrphansRule,
     &SuspectLinksRule,
+    &UnreviewedItemsRule,
 ];
 
 /// Orchestrates all validation rules.
@@ -192,13 +193,13 @@ mod tests {
             .build()
             .unwrap();
 
-        // Non-strict mode: orphan is a warning
+        // Non-strict mode: orphan is a warning (plus unreviewed warning)
         let report = validate(&graph, false);
         assert!(
             report.is_valid(),
             "Orphan should be warning in non-strict mode"
         );
-        assert_eq!(report.warning_count(), 1);
+        assert_eq!(report.warning_count(), 2);
     }
 
     #[test]
@@ -208,10 +209,10 @@ mod tests {
             .build()
             .unwrap();
 
-        // Strict mode: orphan is an error
+        // Strict mode: orphan is an error (plus unreviewed error)
         let report = validate(&graph, true);
         assert!(!report.is_valid(), "Orphan should be error in strict mode");
-        assert_eq!(report.error_count(), 1);
+        assert_eq!(report.error_count(), 2);
     }
 
     #[test]

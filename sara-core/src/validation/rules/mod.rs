@@ -11,6 +11,7 @@ mod orphans;
 mod redundant;
 mod relationships;
 mod suspect_links;
+mod unreviewed;
 
 // Export rule structs for the validator
 pub use broken_refs::BrokenReferencesRule;
@@ -21,3 +22,4 @@ pub use orphans::OrphansRule;
 pub use redundant::RedundantRelationshipsRule;
 pub use relationships::RelationshipsRule;
 pub use suspect_links::SuspectLinksRule;
+pub use unreviewed::UnreviewedItemsRule;

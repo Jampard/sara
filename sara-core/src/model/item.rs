@@ -984,6 +984,16 @@ impl ItemAttributes {
 
 use crate::model::metadata::SourceLocation;
 
+/// A typed reference to another entity in the knowledge graph.
+///
+/// Participants model N-ary relationships where an item references
+/// multiple entities with distinct roles (e.g., "subject", "witness").
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Participant {
+    pub entity: ItemId,
+    pub role: String,
+}
+
 /// Represents a single document/node in the knowledge graph.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Item {
@@ -1030,6 +1040,26 @@ pub struct Item {
     /// SHA-256 of body content, computed during parsing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body_hash: Option<String>,
+
+    /// Derived items are auto-generated or synthesized; suppresses orphan warnings.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub derived: bool,
+
+    /// Normative items count toward coverage metrics (default: true).
+    #[serde(default = "default_normative", skip_serializing_if = "is_true")]
+    pub normative: bool,
+
+    /// N-ary participant references with typed roles.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub participants: Vec<Participant>,
+}
+
+fn default_normative() -> bool {
+    true
+}
+
+fn is_true(v: &bool) -> bool {
+    *v
 }
 
 impl Item {
@@ -1077,6 +1107,9 @@ pub struct ItemBuilder {
     reviewed: Option<String>,
     stamps: Option<HashMap<ItemId, String>>,
     body_hash: Option<String>,
+    derived: bool,
+    normative: Option<bool>,
+    participants: Vec<Participant>,
 }
 
 impl ItemBuilder {
@@ -1214,6 +1247,21 @@ impl ItemBuilder {
     /// Sets the body hash.
     pub fn body_hash(mut self, body_hash: String) -> Self {
         self.body_hash = Some(body_hash);
+        self
+    }
+
+    pub fn derived(mut self, derived: bool) -> Self {
+        self.derived = derived;
+        self
+    }
+
+    pub fn normative(mut self, normative: bool) -> Self {
+        self.normative = Some(normative);
+        self
+    }
+
+    pub fn participants(mut self, participants: Vec<Participant>) -> Self {
+        self.participants = participants;
         self
     }
 
@@ -1417,6 +1465,9 @@ impl ItemBuilder {
             reviewed: self.reviewed,
             stamps: self.stamps.unwrap_or_default(),
             body_hash: self.body_hash,
+            derived: self.derived,
+            normative: self.normative.unwrap_or(true),
+            participants: self.participants,
         })
     }
 }

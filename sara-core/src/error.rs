@@ -46,6 +46,8 @@ pub enum ValidationErrorCode {
     RedundantRelationship,
     /// Link target changed since last review.
     SuspectLink,
+    /// Item content changed since last review.
+    UnreviewedItem,
 }
 
 impl ValidationErrorCode {
@@ -64,6 +66,7 @@ impl ValidationErrorCode {
             Self::UnrecognizedField => "unrecognized_field",
             Self::RedundantRelationship => "redundant_relationship",
             Self::SuspectLink => "suspect_link",
+            Self::UnreviewedItem => "unreviewed_item",
         }
     }
 }
@@ -148,6 +151,9 @@ pub enum ValidationError {
         target_id: String,
         reason: String,
     },
+
+    #[error("Unreviewed item: {item_id}: {reason}")]
+    UnreviewedItem { item_id: String, reason: String },
 }
 
 impl ValidationError {
@@ -159,6 +165,7 @@ impl ValidationError {
             Self::UnrecognizedField { .. }
                 | Self::RedundantRelationship { .. }
                 | Self::SuspectLink { .. }
+                | Self::UnreviewedItem { .. }
         )
     }
 
@@ -177,6 +184,7 @@ impl ValidationError {
             Self::UnrecognizedField { .. } => ValidationErrorCode::UnrecognizedField,
             Self::RedundantRelationship { .. } => ValidationErrorCode::RedundantRelationship,
             Self::SuspectLink { .. } => ValidationErrorCode::SuspectLink,
+            Self::UnreviewedItem { .. } => ValidationErrorCode::UnreviewedItem,
         }
     }
 }
