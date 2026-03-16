@@ -96,7 +96,7 @@ pub struct RawFrontmatter {
     #[serde(default)]
     pub parent: Vec<String>,
     #[serde(default)]
-    pub cites: Vec<String>,
+    pub cites: Vec<CiteEntry>,
     #[serde(default)]
     pub evaluates: Vec<String>,
     #[serde(default)]
@@ -157,6 +157,23 @@ pub struct RawFrontmatter {
     pub participants: Vec<RawParticipant>,
 }
 
+/// Accepts both old flat format (`"EVD-uid"`) and new structured format (`{evd: "EVD-uid", weight: "diagnostic"}`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum CiteEntry {
+    Structured { evd: String, weight: String },
+    Flat(String),
+}
+
+impl CiteEntry {
+    pub fn uid(&self) -> &str {
+        match self {
+            CiteEntry::Structured { evd, .. } => evd,
+            CiteEntry::Flat(s) => s,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct RawParticipant {
     pub entity: String,
@@ -180,7 +197,7 @@ impl RawFrontmatter {
             satisfies: self.satisfies.iter().map(ItemId::new_unchecked).collect(),
             justifies: self.justifies.iter().map(ItemId::new_unchecked).collect(),
             parent: self.parent.iter().map(ItemId::new_unchecked).collect(),
-            cites: self.cites.iter().map(ItemId::new_unchecked).collect(),
+            cites: self.cites.iter().map(|c| ItemId::new_unchecked(c.uid())).collect(),
             evaluates: self.evaluates.iter().map(ItemId::new_unchecked).collect(),
             established_by: self
                 .established_by
@@ -702,6 +719,68 @@ Analysis body.
         assert_eq!(item.upstream.evaluates.len(), 1);
         assert_eq!(item.downstream.premises.len(), 1);
         assert_eq!(item.downstream.gaps.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_structured_cites() {
+        let content = r#"---
+id: "ANL-002"
+type: analysis
+name: "Structured Cites Analysis"
+parent:
+  - "THS-001"
+cites:
+  - evd: "EVD-001"
+    weight: "diagnostic"
+  - evd: "EVD-002"
+    weight: "consistent"
+evaluates:
+  - "HYP-001"
+---
+
+Analysis with structured cites.
+"#;
+        let item = parse_markdown_file(
+            content,
+            &PathBuf::from("ANL-002.md"),
+            &PathBuf::from("/repo"),
+        )
+        .unwrap();
+
+        assert_eq!(item.item_type, ItemType::Analysis);
+        assert_eq!(item.upstream.cites.len(), 2);
+        assert_eq!(item.upstream.cites[0].as_str(), "EVD-001");
+        assert_eq!(item.upstream.cites[1].as_str(), "EVD-002");
+    }
+
+    #[test]
+    fn test_parse_mixed_cites_formats() {
+        let content = r#"---
+id: "ANL-003"
+type: analysis
+name: "Mixed Cites Analysis"
+parent:
+  - "THS-001"
+cites:
+  - "EVD-001"
+  - evd: "EVD-002"
+    weight: "diagnostic"
+evaluates:
+  - "HYP-001"
+---
+
+Analysis with mixed cites formats.
+"#;
+        let item = parse_markdown_file(
+            content,
+            &PathBuf::from("ANL-003.md"),
+            &PathBuf::from("/repo"),
+        )
+        .unwrap();
+
+        assert_eq!(item.upstream.cites.len(), 2);
+        assert_eq!(item.upstream.cites[0].as_str(), "EVD-001");
+        assert_eq!(item.upstream.cites[1].as_str(), "EVD-002");
     }
 
     #[test]
