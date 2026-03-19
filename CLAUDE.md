@@ -43,11 +43,11 @@ Cargo workspace with two crates:
 
 | Module | Purpose |
 |--------|---------|
-| `model/` | Domain types: `Item`, `ItemId`, `ItemType` (10 types), `RelationshipType`, `UpstreamRefs`/`DownstreamRefs`, `ItemAttributes` (type-specific enum), `ItemBuilder` |
+| `model/` | Domain types: `Item`, `ItemId`, `ItemType` (18 types: 10 SE + 8 investigation), `RelationshipType`, `UpstreamRefs`/`DownstreamRefs`, `ItemAttributes` (type-specific enum), `ItemBuilder`, envelope structs (`EnvelopeMessage`, `EnvelopeDeposition`, `EnvelopeFlight`, `EnvelopeTransaction`) |
 | `graph/` | `KnowledgeGraph` (wraps `petgraph::DiGraph<Item, RelationshipType>`) with `HashMap<ItemId, NodeIndex>` index. `KnowledgeGraphBuilder` does two-pass construction: add nodes, then resolve relationships |
-| `parser/` | Extracts YAML frontmatter from Markdown files, maps to `Item` via `ItemBuilder` |
+| `parser/` | Extracts YAML frontmatter from Markdown/MDX files, maps to `Item` via `ItemBuilder`. Raw envelope serde types convert string UIDs to `ItemId` |
 | `repository/` | File discovery via glob patterns across multiple repo paths. `GitReader` reads files at specific git refs |
-| `validation/` | Rule-based validator with individual rules in `validation/rules/` (broken_refs, cycles, duplicates, metadata, orphans, redundant, relationships) |
+| `validation/` | Rule-based validator with individual rules in `validation/rules/` (broken_refs, cycles, duplicates, metadata, orphans, redundant, relationships, suspect_links, unreviewed, envelope, deprecated) |
 | `query/` | Traceability traversal — upstream/downstream chain walking |
 | `report/` | Coverage reports and traceability matrices (text, JSON, CSV output) |
 | `diff/` | Compares two `KnowledgeGraph` instances (e.g., between git refs) |
@@ -55,13 +55,14 @@ Cargo workspace with two crates:
 | `template/` | Tera-based document template generation |
 | `init/` | New document initialization with frontmatter |
 | `edit/` | In-place editing of existing document metadata |
+| `fingerprint/` | SHA-256 content fingerprinting and review stamp management |
 | `error.rs` | Error hierarchy: `SaraError` > `ParseError`, `ValidationError`, `ConfigError`, `QueryError`, `GitError`, `EditError` |
 
 ### sara-cli modules
 
 | Module | Purpose |
 |--------|---------|
-| `commands/` | One file per subcommand: `check`, `diff`, `edit`, `init`, `query`, `report`. Shared `CommandContext` holds output config + repo paths |
+| `commands/` | One file per subcommand: `check`, `clear`, `diff`, `edit`, `init`, `query`, `report`, `review`. Shared `CommandContext` holds output config + repo paths |
 | `output/` | Colored/emoji terminal formatting, respects `--no-color`/`--no-emoji`/`NO_COLOR` env |
 
 ### Key design patterns
@@ -70,6 +71,7 @@ Cargo workspace with two crates:
 - **Bidirectional relationships**: Defining a relationship in one direction (e.g., `refines`) auto-creates the inverse edge (`is_refined_by`). Both upstream and downstream refs on `Item` are checked.
 - **Type-specific attributes via enum**: `ItemAttributes` is a tagged enum — each `ItemType` maps to a variant with its own fields (e.g., `SystemRequirement { specification, depends_on }`).
 - **Validation rules as separate structs**: Each rule in `validation/rules/` implements a trait, composed by the `Validator`.
+- **Entity-entity edges from envelopes**: Evidence envelope data (messages, flights, transactions) is used to build peer edges between entities during graph construction, with HashSet deduplication per entity pair per evidence item.
 
 ## Rust edition and toolchain
 
@@ -81,7 +83,7 @@ Cargo workspace with two crates:
 ## Testing
 
 - Unit tests live alongside source code (`#[cfg(test)] mod tests`)
-- Integration test fixtures in `tests/fixtures/` (valid_graph, broken_refs, cycles, duplicates, orphans, edit_tests)
+- Integration test fixtures in `tests/fixtures/` (valid_graph, broken_refs, cycles, duplicates, orphans, edit_tests, investigation, envelope)
 - CLI integration tests in `sara-cli/tests/cli_tests.rs` using `assert_cmd`
 - `sara-core/src/test_utils.rs` provides helpers like `create_test_item`, `create_test_item_with_upstream`, `create_test_adr`
 

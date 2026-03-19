@@ -79,7 +79,7 @@ Authors define the relation in one direction. SARA infers the reverse. The graph
 
 ## 3. N-ary participants with typed roles
 
-> **Status:** Not started.
+> **Status:** Implemented (`6dab843`). Participants stored on `Item`, flattened to `Participant`/`ParticipantOf` graph edges.
 
 **Reference:** Wombatt [claim-model.md § Participants format](https://github.com/jamps/wombatt/blob/main/docs/claim-model.md#participants-format) — N-ary participant model with named roles per relation type.
 
@@ -116,7 +116,7 @@ Role definitions per relation type should be configurable:
 
 ## 4. Per-link fingerprint stamps and suspect link detection
 
-> **Status:** Not started. This is the highest-priority remaining capability.
+> **Status:** Implemented (`9c559ce`, `a51faa8`, `75468c2`, `2bcf7a6`). SHA-256 fingerprints, per-link stamps, suspect link validation, `sara review` and `sara clear` commands.
 
 **Reference:** Doorstop ([doorstop-dev/doorstop](https://github.com/doorstop-dev/doorstop)) — SHA-stamped suspect link detection. Wombatt [claim-model.md § Suspect Link Detection](https://github.com/jamps/wombatt/blob/main/docs/claim-model.md#suspect-link-detection) — truth maintenance via inference DAG.
 
@@ -139,7 +139,7 @@ This is the critical capability SARA currently lacks. SARA can detect broken ref
 
 ## 5. Review tracking
 
-> **Status:** Not started. Depends on section 4 (fingerprinting).
+> **Status:** Implemented (`75468c2`, `6dab843`). Per-item `reviewed` field, `UnreviewedItemsRule` validation, `sara review` command.
 
 **Reference:** Doorstop — per-item `reviewed` field with fingerprint comparison. Doorstop [Item.review()](https://github.com/doorstop-dev/doorstop/blob/develop/doorstop/core/item.py) — marks item as reviewed by storing its own current fingerprint.
 
@@ -167,7 +167,7 @@ SARA already has an optional `name` field on every item, used for display in CLI
 
 ## 7. Derived and non-normative items
 
-> **Status:** Partially covered. Root types suppress orphan warnings. Per-item flags not yet implemented.
+> **Status:** Implemented (`6dab843`). Per-item `derived` and `normative` flags. Derived items suppress orphan warnings; non-normative items excluded from coverage.
 
 **Reference:** Doorstop — `derived` and `normative` flags for traceability classification.
 
@@ -175,6 +175,29 @@ SARA already has an optional `name` field on every item, used for display in CLI
 
 - **Derived:** Items not expected to have upstream links (e.g., root entities, top-level theses). Suppresses "orphaned item" warnings. Currently handled at the type level — `Entity`, `Thesis`, and `Block` return `is_root() = true`. A per-item `derived: true` frontmatter flag would allow any item to opt out of orphan warnings regardless of type.
 - **Non-normative:** Items excluded from traceability checks and coverage reports (e.g., section headings, structural separators). Not yet implemented.
+
+---
+
+## 8. Structured evidence envelopes and entity-entity edges
+
+> **Status:** Implemented (`aa62c3a`). MDX support, 4 envelope types, 5 entity-entity relation pairs, envelope validation, deprecated field lint, envelope fingerprinting.
+
+**Reference:** Wombatt [claim-model.md](https://github.com/jamps/wombatt/blob/main/docs/claim-model.md) — structured envelope schemas (messages, deposition, flights, transactions).
+
+Evidence items can now carry structured envelope data in frontmatter alongside participants. Each envelope type captures a specific kind of interaction between entities:
+
+| Envelope | Fields | Entity-entity edge |
+|----------|--------|--------------------|
+| `messages` | from, to, cc, bcc, date, subject | `communicated_with` / `received_communication_from` |
+| `deposition` | witness, exchanges (speaker, page, objection) | *(no edges — witness/speaker tracked via participants)* |
+| `flights` | origin, destination, passengers, aircraft | `traveled_with` (symmetric co-occurrence) |
+| `transactions` | from, to, amount, currency, method | `paid_to` / `received_payment_from` |
+
+**Validation rules:**
+- **EnvelopeRule**: Every entity UID in envelope data must appear in `participants`. At most one envelope type per evidence item. Envelope IDs must be unique within their array.
+- **DeprecatedFieldsRule**: Configurable per-type deprecated field warnings via `sara.toml` for the MDX migration period.
+
+**File discovery:** `.mdx` files are now accepted alongside `.md` and `.markdown`.
 
 ---
 
