@@ -21,10 +21,14 @@ impl ValidationRule for CyclesRule {
         let mut errors = Vec::new();
         let inner = graph.inner();
 
-        // Filter the graph to only include primary relationships for cycle detection.
+        // Filter the graph to only include primary hierarchical relationships for cycle detection.
         // Inverse relationships (IsRefinedBy, Derives, IsSatisfiedBy, etc.) are excluded
         // because they're just for traversal and would cause false positives.
-        let filtered = EdgeFiltered::from_fn(inner, |edge| edge.weight().is_primary());
+        // Peer relationships (CommunicatedWith, TraveledWith, PaidTo, etc.) are excluded
+        // because bidirectional entity-entity edges are not hierarchical cycles.
+        let filtered = EdgeFiltered::from_fn(inner, |edge| {
+            edge.weight().is_primary() && !edge.weight().is_peer()
+        });
 
         // Find strongly connected components on the filtered graph
         let sccs = tarjan_scc(&filtered);
@@ -46,7 +50,7 @@ impl ValidationRule for CyclesRule {
                 let idx = scc[0];
                 let has_self_loop = inner
                     .edges_connecting(idx, idx)
-                    .any(|e| e.weight().is_primary());
+                    .any(|e| e.weight().is_primary() && !e.weight().is_peer());
 
                 if has_self_loop && let Some(item) = inner.node_weight(idx) {
                     errors.push(ValidationError::CircularReference {
@@ -89,7 +93,7 @@ fn would_create_cycle(
 mod tests {
     use super::*;
     use crate::graph::KnowledgeGraphBuilder;
-    use crate::model::{ItemId, ItemType, UpstreamRefs};
+    use crate::model::{ItemBuilder, ItemId, ItemType, UpstreamRefs};
     use crate::test_utils::{create_test_item, create_test_item_with_upstream};
 
     #[test]
@@ -174,5 +178,149 @@ mod tests {
             &ItemId::new_unchecked("UC-001"),
             &ItemId::new_unchecked("SCEN-001"),
         ));
+    }
+
+    #[test]
+    fn test_peer_edges_do_not_cause_false_cycle() {
+        use crate::model::{EnvelopeMessage, Participant};
+
+        // Build two entities connected by bidirectional CommunicatedWith edges
+        // via a messages envelope. This should NOT be detected as a cycle.
+        let entity_a = create_test_item("ITM-alice", ItemType::Entity);
+        let entity_b = create_test_item("ITM-bob", ItemType::Entity);
+
+        let evidence = ItemBuilder::new()
+            .id(ItemId::new_unchecked("EVD-001"))
+            .item_type(ItemType::Evidence)
+            .name("Email Thread")
+            .source(crate::model::SourceLocation::new(
+                std::path::PathBuf::from("/test"),
+                "EVD-001.md",
+            ))
+            .participants(vec![
+                Participant {
+                    entity: ItemId::new_unchecked("ITM-alice"),
+                    role: "sender".into(),
+                },
+                Participant {
+                    entity: ItemId::new_unchecked("ITM-bob"),
+                    role: "recipient".into(),
+                },
+            ])
+            .envelope_messages(vec![
+                EnvelopeMessage {
+                    id: 1,
+                    from: ItemId::new_unchecked("ITM-alice"),
+                    to: vec![ItemId::new_unchecked("ITM-bob")],
+                    date: None,
+                    subject: None,
+                    cc: None,
+                    bcc: None,
+                    forward: None,
+                    removed: None,
+                },
+                EnvelopeMessage {
+                    id: 2,
+                    from: ItemId::new_unchecked("ITM-bob"),
+                    to: vec![ItemId::new_unchecked("ITM-alice")],
+                    date: None,
+                    subject: None,
+                    cc: None,
+                    bcc: None,
+                    forward: None,
+                    removed: None,
+                },
+            ])
+            .build()
+            .unwrap();
+
+        let graph = KnowledgeGraphBuilder::new()
+            .add_item(entity_a)
+            .add_item(entity_b)
+            .add_item(evidence)
+            .build()
+            .unwrap();
+
+        let rule = CyclesRule;
+        let errors = rule.validate(&graph, &ValidationConfig::default());
+        assert!(
+            errors.is_empty(),
+            "Bidirectional peer edges should not be detected as cycles, got: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn test_real_cycle_still_detected_with_peer_edges() {
+        use crate::model::{EnvelopeMessage, Participant};
+
+        // Create a real hierarchical cycle AND peer edges.
+        // The cycle should still be detected.
+        let scen1 = create_test_item_with_upstream(
+            "SCEN-001",
+            ItemType::Scenario,
+            UpstreamRefs {
+                refines: vec![ItemId::new_unchecked("SCEN-002")],
+                ..Default::default()
+            },
+        );
+        let scen2 = create_test_item_with_upstream(
+            "SCEN-002",
+            ItemType::Scenario,
+            UpstreamRefs {
+                refines: vec![ItemId::new_unchecked("SCEN-001")],
+                ..Default::default()
+            },
+        );
+
+        // Also add entities with peer edges (should be ignored for cycle detection)
+        let entity_a = create_test_item("ITM-a", ItemType::Entity);
+        let entity_b = create_test_item("ITM-b", ItemType::Entity);
+        let evidence = ItemBuilder::new()
+            .id(ItemId::new_unchecked("EVD-001"))
+            .item_type(ItemType::Evidence)
+            .name("Emails")
+            .source(crate::model::SourceLocation::new(
+                std::path::PathBuf::from("/test"),
+                "EVD-001.md",
+            ))
+            .participants(vec![
+                Participant {
+                    entity: ItemId::new_unchecked("ITM-a"),
+                    role: "sender".into(),
+                },
+                Participant {
+                    entity: ItemId::new_unchecked("ITM-b"),
+                    role: "recipient".into(),
+                },
+            ])
+            .envelope_messages(vec![EnvelopeMessage {
+                id: 1,
+                from: ItemId::new_unchecked("ITM-a"),
+                to: vec![ItemId::new_unchecked("ITM-b")],
+                date: None,
+                subject: None,
+                cc: None,
+                bcc: None,
+                forward: None,
+                removed: None,
+            }])
+            .build()
+            .unwrap();
+
+        let graph = KnowledgeGraphBuilder::new()
+            .add_item(scen1)
+            .add_item(scen2)
+            .add_item(entity_a)
+            .add_item(entity_b)
+            .add_item(evidence)
+            .build()
+            .unwrap();
+
+        let rule = CyclesRule;
+        let errors = rule.validate(&graph, &ValidationConfig::default());
+        assert!(
+            !errors.is_empty(),
+            "Real hierarchical cycle should still be detected despite peer edges"
+        );
     }
 }

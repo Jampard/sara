@@ -8,8 +8,9 @@ use sha2::{Digest, Sha256};
 
 use crate::error::ParseError;
 use crate::model::{
-    AdrStatus, DownstreamRefs, Item, ItemBuilder, ItemId, ItemType, Participant, SourceLocation,
-    UpstreamRefs,
+    AdrStatus, DepositionExchange, DownstreamRefs, EnvelopeDeposition, EnvelopeFlight,
+    EnvelopeMessage, EnvelopeTransaction, Item, ItemBuilder, ItemId, ItemType, Participant,
+    SourceLocation, UpstreamRefs,
 };
 use crate::parser::frontmatter::extract_frontmatter;
 
@@ -155,6 +156,16 @@ pub struct RawFrontmatter {
     // N-ary participants
     #[serde(default)]
     pub participants: Vec<RawParticipant>,
+
+    // Envelope fields (Evidence type)
+    #[serde(default)]
+    messages: Vec<RawMessage>,
+    #[serde(default)]
+    deposition: Option<RawDeposition>,
+    #[serde(default)]
+    flights: Vec<RawFlight>,
+    #[serde(default)]
+    transactions: Vec<RawTransaction>,
 }
 
 /// Accepts both old flat format (`"EVD-uid"`) and new structured format (`{evd: "EVD-uid", weight: "diagnostic"}`).
@@ -180,6 +191,67 @@ pub struct RawParticipant {
     pub role: String,
 }
 
+/// Raw message for YAML deserialization (string UIDs before conversion to ItemId).
+#[derive(Debug, Clone, Deserialize)]
+struct RawMessage {
+    id: i64,
+    from: String,
+    to: Vec<String>,
+    #[serde(default)]
+    date: Option<String>,
+    #[serde(default)]
+    subject: Option<String>,
+    #[serde(default)]
+    cc: Option<Vec<String>>,
+    #[serde(default)]
+    bcc: Option<Vec<String>>,
+    #[serde(default)]
+    forward: Option<bool>,
+    #[serde(default)]
+    removed: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RawDepoExchange {
+    id: i64,
+    speaker: String,
+    #[serde(default)]
+    page: Option<i64>,
+    #[serde(default)]
+    objection: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RawDeposition {
+    witness: String,
+    date: String,
+    proceeding: String,
+    exchanges: Vec<RawDepoExchange>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RawFlight {
+    id: i64,
+    date: String,
+    origin: String,
+    destination: String,
+    #[serde(default)]
+    aircraft: Option<String>,
+    passengers: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RawTransaction {
+    id: i64,
+    date: String,
+    from: String,
+    to: String,
+    amount: f64,
+    currency: String,
+    #[serde(default)]
+    method: Option<String>,
+}
+
 fn default_normative() -> bool {
     true
 }
@@ -197,7 +269,11 @@ impl RawFrontmatter {
             satisfies: self.satisfies.iter().map(ItemId::new_unchecked).collect(),
             justifies: self.justifies.iter().map(ItemId::new_unchecked).collect(),
             parent: self.parent.iter().map(ItemId::new_unchecked).collect(),
-            cites: self.cites.iter().map(|c| ItemId::new_unchecked(c.uid())).collect(),
+            cites: self
+                .cites
+                .iter()
+                .map(|c| ItemId::new_unchecked(c.uid()))
+                .collect(),
             evaluates: self.evaluates.iter().map(ItemId::new_unchecked).collect(),
             established_by: self
                 .established_by
@@ -345,6 +421,83 @@ pub fn parse_markdown_file(
             if let Some(ref r) = frontmatter.relation {
                 builder = builder.relation(r.clone());
             }
+            // Convert raw envelope types to domain types
+            if !frontmatter.messages.is_empty() {
+                let messages = frontmatter
+                    .messages
+                    .iter()
+                    .map(|m| EnvelopeMessage {
+                        id: m.id,
+                        from: ItemId::new_unchecked(&m.from),
+                        to: m.to.iter().map(ItemId::new_unchecked).collect(),
+                        date: m.date.clone(),
+                        subject: m.subject.clone(),
+                        cc: m
+                            .cc
+                            .as_ref()
+                            .map(|v| v.iter().map(ItemId::new_unchecked).collect()),
+                        bcc: m
+                            .bcc
+                            .as_ref()
+                            .map(|v| v.iter().map(ItemId::new_unchecked).collect()),
+                        forward: m.forward,
+                        removed: m
+                            .removed
+                            .as_ref()
+                            .map(|v| v.iter().map(ItemId::new_unchecked).collect()),
+                    })
+                    .collect();
+                builder = builder.envelope_messages(messages);
+            }
+            if let Some(ref d) = frontmatter.deposition {
+                let depo = EnvelopeDeposition {
+                    witness: ItemId::new_unchecked(&d.witness),
+                    date: d.date.clone(),
+                    proceeding: d.proceeding.clone(),
+                    exchanges: d
+                        .exchanges
+                        .iter()
+                        .map(|ex| DepositionExchange {
+                            id: ex.id,
+                            speaker: ItemId::new_unchecked(&ex.speaker),
+                            page: ex.page,
+                            objection: ex.objection,
+                        })
+                        .collect(),
+                };
+                builder = builder.envelope_deposition(depo);
+            }
+            if !frontmatter.flights.is_empty() {
+                let flights = frontmatter
+                    .flights
+                    .iter()
+                    .map(|f| EnvelopeFlight {
+                        id: f.id,
+                        date: f.date.clone(),
+                        origin: ItemId::new_unchecked(&f.origin),
+                        destination: ItemId::new_unchecked(&f.destination),
+                        aircraft: f.aircraft.as_ref().map(ItemId::new_unchecked),
+                        passengers: f.passengers.iter().map(ItemId::new_unchecked).collect(),
+                    })
+                    .collect();
+                builder = builder.envelope_flights(flights);
+            }
+            if !frontmatter.transactions.is_empty() {
+                let transactions = frontmatter
+                    .transactions
+                    .iter()
+                    .map(|t| EnvelopeTransaction {
+                        id: t.id,
+                        date: t.date.clone(),
+                        from: ItemId::new_unchecked(&t.from),
+                        to: ItemId::new_unchecked(&t.to),
+                        amount: t.amount,
+                        currency: t.currency.clone(),
+                        method: t.method.clone(),
+                    })
+                    .collect();
+                builder = builder.envelope_transactions(transactions);
+            }
         }
         ItemType::Analysis | ItemType::Hypothesis => {
             if let Some(ref a) = frontmatter.assessment {
@@ -388,6 +541,15 @@ pub fn parse_markdown_file(
             })
             .collect();
         builder = builder.participants(participants);
+    }
+
+    // Extract raw YAML field keys for deprecated field detection
+    if let Ok(serde_yaml::Value::Mapping(mapping)) = serde_yaml::from_str(&extracted.yaml) {
+        let keys: Vec<String> = mapping
+            .keys()
+            .filter_map(|k| k.as_str().map(String::from))
+            .collect();
+        builder = builder.raw_field_keys(keys);
     }
 
     // Compute body_hash from body content
@@ -903,5 +1065,164 @@ affects:
 
         assert_eq!(item.item_type, ItemType::Block);
         assert_eq!(item.upstream.affects.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_evidence_with_messages_envelope() {
+        let content = r#"---
+id: "EVD-msg"
+type: evidence
+name: "Email Thread"
+sourcing: "forensic"
+participants:
+  - entity: "ITM-alice"
+    role: "sender"
+  - entity: "ITM-bob"
+    role: "recipient"
+messages:
+  - id: 1
+    from: "ITM-alice"
+    to:
+      - "ITM-bob"
+    date: "2024-01-15"
+    subject: "Meeting"
+    cc:
+      - "ITM-carol"
+  - id: 2
+    from: "ITM-bob"
+    to:
+      - "ITM-alice"
+---
+Email body.
+"#;
+        let item = parse_markdown_file(
+            content,
+            &PathBuf::from("EVD-msg.mdx"),
+            &PathBuf::from("/repo"),
+        )
+        .unwrap();
+
+        assert_eq!(item.item_type, ItemType::Evidence);
+        let msgs = item.attributes.messages();
+        assert_eq!(msgs.len(), 2);
+        assert_eq!(msgs[0].from.as_str(), "ITM-alice");
+        assert_eq!(msgs[0].to[0].as_str(), "ITM-bob");
+        assert_eq!(msgs[0].subject.as_deref(), Some("Meeting"));
+        assert_eq!(msgs[0].cc.as_ref().unwrap()[0].as_str(), "ITM-carol");
+        assert_eq!(msgs[1].from.as_str(), "ITM-bob");
+    }
+
+    #[test]
+    fn test_parse_evidence_with_flights_envelope() {
+        let content = r#"---
+id: "EVD-flt"
+type: evidence
+name: "Flight Records"
+participants:
+  - entity: "ITM-alice"
+    role: "passenger"
+  - entity: "ITM-loc-a"
+    role: "location"
+flights:
+  - id: 1
+    date: "2024-02-10"
+    origin: "ITM-loc-a"
+    destination: "ITM-loc-b"
+    aircraft: "ITM-plane"
+    passengers:
+      - "ITM-alice"
+---
+"#;
+        let item = parse_markdown_file(
+            content,
+            &PathBuf::from("EVD-flt.md"),
+            &PathBuf::from("/repo"),
+        )
+        .unwrap();
+
+        let flights = item.attributes.flights();
+        assert_eq!(flights.len(), 1);
+        assert_eq!(flights[0].origin.as_str(), "ITM-loc-a");
+        assert_eq!(flights[0].destination.as_str(), "ITM-loc-b");
+        assert_eq!(flights[0].aircraft.as_ref().unwrap().as_str(), "ITM-plane");
+        assert_eq!(flights[0].passengers.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_evidence_with_transactions_envelope() {
+        let content = r#"---
+id: "EVD-txn"
+type: evidence
+name: "Financial Records"
+participants:
+  - entity: "ITM-alice"
+    role: "payer"
+  - entity: "ITM-bob"
+    role: "payee"
+transactions:
+  - id: 1
+    date: "2024-03-01"
+    from: "ITM-alice"
+    to: "ITM-bob"
+    amount: 5000.00
+    currency: "USD"
+    method: "wire"
+---
+"#;
+        let item = parse_markdown_file(
+            content,
+            &PathBuf::from("EVD-txn.md"),
+            &PathBuf::from("/repo"),
+        )
+        .unwrap();
+
+        let txns = item.attributes.transactions();
+        assert_eq!(txns.len(), 1);
+        assert_eq!(txns[0].from.as_str(), "ITM-alice");
+        assert_eq!(txns[0].to.as_str(), "ITM-bob");
+        assert!((txns[0].amount - 5000.0).abs() < f64::EPSILON);
+        assert_eq!(txns[0].currency, "USD");
+        assert_eq!(txns[0].method.as_deref(), Some("wire"));
+    }
+
+    #[test]
+    fn test_parse_evidence_with_deposition_envelope() {
+        let content = r#"---
+id: "EVD-dep"
+type: evidence
+name: "Deposition Transcript"
+participants:
+  - entity: "ITM-alice"
+    role: "witness"
+  - entity: "ITM-bob"
+    role: "examiner"
+deposition:
+  witness: "ITM-alice"
+  date: "2024-04-01"
+  proceeding: "Case No. 2024-001"
+  exchanges:
+    - id: 1
+      speaker: "ITM-bob"
+      page: 5
+    - id: 2
+      speaker: "ITM-alice"
+      page: 5
+      objection: true
+---
+"#;
+        let item = parse_markdown_file(
+            content,
+            &PathBuf::from("EVD-dep.md"),
+            &PathBuf::from("/repo"),
+        )
+        .unwrap();
+
+        let depo = item.attributes.deposition().unwrap();
+        assert_eq!(depo.witness.as_str(), "ITM-alice");
+        assert_eq!(depo.proceeding, "Case No. 2024-001");
+        assert_eq!(depo.exchanges.len(), 2);
+        assert_eq!(depo.exchanges[0].speaker.as_str(), "ITM-bob");
+        assert_eq!(depo.exchanges[0].page, Some(5));
+        assert_eq!(depo.exchanges[1].objection, Some(true));
     }
 }

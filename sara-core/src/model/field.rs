@@ -69,6 +69,13 @@ pub enum FieldName {
     // Participant fields
     Participants,
     ParticipantOf,
+
+    // Entity-entity envelope-derived fields
+    CommunicatedWith,
+    ReceivedCommunicationFrom,
+    TraveledWith,
+    PaidTo,
+    ReceivedPaymentFrom,
 }
 
 impl FieldName {
@@ -117,6 +124,11 @@ impl FieldName {
             Self::AffectedBy,
             Self::Participants,
             Self::ParticipantOf,
+            Self::CommunicatedWith,
+            Self::ReceivedCommunicationFrom,
+            Self::TraveledWith,
+            Self::PaidTo,
+            Self::ReceivedPaymentFrom,
         ]
     }
 
@@ -167,6 +179,11 @@ impl FieldName {
             Self::AffectedBy => "affected_by",
             Self::Participants => "participants",
             Self::ParticipantOf => "participant_of",
+            Self::CommunicatedWith => "communicated_with",
+            Self::ReceivedCommunicationFrom => "received_communication_from",
+            Self::TraveledWith => "traveled_with",
+            Self::PaidTo => "paid_to",
+            Self::ReceivedPaymentFrom => "received_payment_from",
         }
     }
 
@@ -217,6 +234,11 @@ impl FieldName {
             Self::AffectedBy => "Affected by",
             Self::Participants => "Participants",
             Self::ParticipantOf => "Participant of",
+            Self::CommunicatedWith => "Communicated with",
+            Self::ReceivedCommunicationFrom => "Received communication from",
+            Self::TraveledWith => "Traveled with",
+            Self::PaidTo => "Paid to",
+            Self::ReceivedPaymentFrom => "Received payment from",
         }
     }
 
@@ -272,6 +294,11 @@ impl FieldName {
                 | Self::SupersededBy
                 | Self::Affects
                 | Self::AffectedBy
+                | Self::CommunicatedWith
+                | Self::ReceivedCommunicationFrom
+                | Self::TraveledWith
+                | Self::PaidTo
+                | Self::ReceivedPaymentFrom
         )
     }
 
@@ -323,7 +350,7 @@ mod tests {
         assert!(all.contains(&FieldName::Specification));
         assert!(all.contains(&FieldName::Status));
         assert!(all.contains(&FieldName::Justifies));
-        assert_eq!(all.len(), 42);
+        assert_eq!(all.len(), 47);
     }
 
     #[test]

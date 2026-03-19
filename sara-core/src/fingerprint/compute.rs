@@ -44,7 +44,6 @@ pub fn compute_item_fingerprint(item: &Item) -> String {
     let mut type_fields = collect_type_fields(item);
 
     // Include participants (sorted for determinism)
-    let participants_str;
     if !item.participants.is_empty() {
         let mut parts: Vec<String> = item
             .participants
@@ -52,22 +51,26 @@ pub fn compute_item_fingerprint(item: &Item) -> String {
             .map(|p| format!("{}:{}", p.entity, p.role))
             .collect();
         parts.sort();
-        participants_str = parts.join(",");
-        type_fields.push(("participants", &participants_str));
+        type_fields.push(("participants", parts.join(",")));
     }
 
-    compute_fingerprint(
-        item.id.as_str(),
-        body,
-        item.outcome.as_deref(),
-        &type_fields,
-    )
+    // Convert owned strings to borrowed for compute_fingerprint
+    let borrowed: Vec<(&str, &str)> = type_fields.iter().map(|(k, v)| (*k, v.as_str())).collect();
+
+    compute_fingerprint(item.id.as_str(), body, item.outcome.as_deref(), &borrowed)
 }
 
 /// Returns the type-specific field names that contribute to fingerprinting.
 pub fn fingerprinted_fields(item_type: ItemType) -> &'static [&'static str] {
     match item_type {
-        ItemType::Evidence => &["relation", "sourcing"],
+        ItemType::Evidence => &[
+            "relation",
+            "sourcing",
+            "messages",
+            "deposition",
+            "flights",
+            "transactions",
+        ],
         ItemType::Analysis | ItemType::Hypothesis => &["assessment"],
         _ => &[],
     }
@@ -79,17 +82,73 @@ pub fn truncate_fingerprint(fingerprint: &str) -> &str {
 }
 
 /// Collects type-specific field values from an item for fingerprinting.
-fn collect_type_fields(item: &Item) -> Vec<(&str, &str)> {
-    let mut fields = Vec::new();
+///
+/// For envelope fields, only structural entity references are fingerprinted
+/// (from, to, passengers, etc.), not content fields (subject, proceeding).
+fn collect_type_fields(item: &Item) -> Vec<(&str, String)> {
+    let mut fields: Vec<(&str, String)> = Vec::new();
     if let Some(s) = item.attributes.sourcing() {
-        fields.push(("sourcing", s));
+        fields.push(("sourcing", s.to_string()));
     }
     if let Some(r) = item.attributes.evidence_relation() {
-        fields.push(("relation", r));
+        fields.push(("relation", r.to_string()));
     }
     if let Some(a) = item.attributes.assessment() {
-        fields.push(("assessment", a));
+        fields.push(("assessment", a.to_string()));
     }
+
+    // Envelope structural fields (deterministic sorted serialization)
+    let messages = item.attributes.messages();
+    if !messages.is_empty() {
+        let mut parts: Vec<String> = messages
+            .iter()
+            .map(|m| {
+                let mut to_sorted: Vec<&str> = m.to.iter().map(|id| id.as_str()).collect();
+                to_sorted.sort();
+                format!("{}>{}", m.from, to_sorted.join(","))
+            })
+            .collect();
+        parts.sort();
+        fields.push(("messages", parts.join(";")));
+    }
+
+    if let Some(depo) = item.attributes.deposition() {
+        let mut speakers: Vec<&str> = depo
+            .exchanges
+            .iter()
+            .map(|ex| ex.speaker.as_str())
+            .collect();
+        speakers.sort();
+        fields.push((
+            "deposition",
+            format!("{}:{}", depo.witness, speakers.join(",")),
+        ));
+    }
+
+    let flights = item.attributes.flights();
+    if !flights.is_empty() {
+        let mut parts: Vec<String> = flights
+            .iter()
+            .map(|f| {
+                let mut pax: Vec<&str> = f.passengers.iter().map(|id| id.as_str()).collect();
+                pax.sort();
+                format!("{}>{}:{}", f.origin, f.destination, pax.join(","))
+            })
+            .collect();
+        parts.sort();
+        fields.push(("flights", parts.join(";")));
+    }
+
+    let txns = item.attributes.transactions();
+    if !txns.is_empty() {
+        let mut parts: Vec<String> = txns
+            .iter()
+            .map(|t| format!("{}>{}:{}", t.from, t.to, t.amount))
+            .collect();
+        parts.sort();
+        fields.push(("transactions", parts.join(";")));
+    }
+
     fields
 }
 
@@ -169,5 +228,141 @@ mod tests {
         let short = truncate_fingerprint(&fp);
         assert_eq!(short.len(), 8);
         assert!(fp.starts_with(short));
+    }
+
+    #[test]
+    fn test_envelope_messages_change_fingerprint() {
+        use crate::model::{
+            EnvelopeMessage, ItemBuilder, ItemId, ItemType, Participant, SourceLocation,
+        };
+        use std::path::PathBuf;
+
+        let source = || SourceLocation::new(PathBuf::from("/test"), "EVD-001.md");
+
+        // Evidence without messages
+        let item_no_msg = ItemBuilder::new()
+            .id(ItemId::new_unchecked("EVD-001"))
+            .item_type(ItemType::Evidence)
+            .name("Test")
+            .source(source())
+            .build()
+            .unwrap();
+
+        // Evidence with messages
+        let item_with_msg = ItemBuilder::new()
+            .id(ItemId::new_unchecked("EVD-001"))
+            .item_type(ItemType::Evidence)
+            .name("Test")
+            .source(source())
+            .participants(vec![
+                Participant {
+                    entity: ItemId::new_unchecked("ITM-a"),
+                    role: "sender".into(),
+                },
+                Participant {
+                    entity: ItemId::new_unchecked("ITM-b"),
+                    role: "recipient".into(),
+                },
+            ])
+            .envelope_messages(vec![EnvelopeMessage {
+                id: 1,
+                from: ItemId::new_unchecked("ITM-a"),
+                to: vec![ItemId::new_unchecked("ITM-b")],
+                date: None,
+                subject: None,
+                cc: None,
+                bcc: None,
+                forward: None,
+                removed: None,
+            }])
+            .build()
+            .unwrap();
+
+        let fp1 = compute_item_fingerprint(&item_no_msg);
+        let fp2 = compute_item_fingerprint(&item_with_msg);
+        assert_ne!(fp1, fp2, "Adding messages should change the fingerprint");
+    }
+
+    #[test]
+    fn test_envelope_fingerprint_deterministic_regardless_of_order() {
+        use crate::model::{
+            EnvelopeMessage, ItemBuilder, ItemId, ItemType, Participant, SourceLocation,
+        };
+        use std::path::PathBuf;
+
+        let source = || SourceLocation::new(PathBuf::from("/test"), "EVD-001.md");
+        let participants = || {
+            vec![
+                Participant {
+                    entity: ItemId::new_unchecked("ITM-a"),
+                    role: "sender".into(),
+                },
+                Participant {
+                    entity: ItemId::new_unchecked("ITM-b"),
+                    role: "recipient".into(),
+                },
+            ]
+        };
+
+        let msg_a_to_b = EnvelopeMessage {
+            id: 1,
+            from: ItemId::new_unchecked("ITM-a"),
+            to: vec![ItemId::new_unchecked("ITM-b")],
+            date: None,
+            subject: None,
+            cc: None,
+            bcc: None,
+            forward: None,
+            removed: None,
+        };
+        let msg_b_to_a = EnvelopeMessage {
+            id: 2,
+            from: ItemId::new_unchecked("ITM-b"),
+            to: vec![ItemId::new_unchecked("ITM-a")],
+            date: None,
+            subject: None,
+            cc: None,
+            bcc: None,
+            forward: None,
+            removed: None,
+        };
+
+        // Order 1: a→b then b→a
+        let item1 = ItemBuilder::new()
+            .id(ItemId::new_unchecked("EVD-001"))
+            .item_type(ItemType::Evidence)
+            .name("Test")
+            .source(source())
+            .participants(participants())
+            .envelope_messages(vec![msg_a_to_b.clone(), msg_b_to_a.clone()])
+            .build()
+            .unwrap();
+
+        // Order 2: b→a then a→b
+        let item2 = ItemBuilder::new()
+            .id(ItemId::new_unchecked("EVD-001"))
+            .item_type(ItemType::Evidence)
+            .name("Test")
+            .source(source())
+            .participants(participants())
+            .envelope_messages(vec![msg_b_to_a, msg_a_to_b])
+            .build()
+            .unwrap();
+
+        let fp1 = compute_item_fingerprint(&item1);
+        let fp2 = compute_item_fingerprint(&item2);
+        assert_eq!(
+            fp1, fp2,
+            "Fingerprint should be deterministic regardless of message order"
+        );
+    }
+
+    #[test]
+    fn test_fingerprinted_fields_evidence_includes_envelopes() {
+        let fields = fingerprinted_fields(ItemType::Evidence);
+        assert!(fields.contains(&"messages"));
+        assert!(fields.contains(&"deposition"));
+        assert!(fields.contains(&"flights"));
+        assert!(fields.contains(&"transactions"));
     }
 }

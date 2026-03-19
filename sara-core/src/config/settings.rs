@@ -1,6 +1,7 @@
 //! Configuration settings structures.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::error::ConfigError;
@@ -87,6 +88,11 @@ pub struct ValidationConfig {
     /// List of allowed custom fields in frontmatter.
     #[serde(default)]
     pub allowed_custom_fields: Vec<String>,
+
+    /// Deprecated fields per item type. Key is the item type string (e.g. "evidence"),
+    /// value is a list of field names that should trigger a deprecation warning.
+    #[serde(default)]
+    pub deprecated_fields: HashMap<String, Vec<String>>,
 }
 
 /// Output settings.

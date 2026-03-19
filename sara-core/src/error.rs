@@ -48,6 +48,8 @@ pub enum ValidationErrorCode {
     SuspectLink,
     /// Item content changed since last review.
     UnreviewedItem,
+    /// Deprecated field used in frontmatter.
+    DeprecatedField,
 }
 
 impl ValidationErrorCode {
@@ -67,6 +69,7 @@ impl ValidationErrorCode {
             Self::RedundantRelationship => "redundant_relationship",
             Self::SuspectLink => "suspect_link",
             Self::UnreviewedItem => "unreviewed_item",
+            Self::DeprecatedField => "deprecated_field",
         }
     }
 }
@@ -154,6 +157,13 @@ pub enum ValidationError {
 
     #[error("Unreviewed item: {item_id}: {reason}")]
     UnreviewedItem { item_id: String, reason: String },
+
+    #[error("Deprecated field '{field}' in {file}: {reason}")]
+    DeprecatedField {
+        field: String,
+        file: String,
+        reason: String,
+    },
 }
 
 impl ValidationError {
@@ -166,6 +176,7 @@ impl ValidationError {
                 | Self::RedundantRelationship { .. }
                 | Self::SuspectLink { .. }
                 | Self::UnreviewedItem { .. }
+                | Self::DeprecatedField { .. }
         )
     }
 
@@ -185,6 +196,7 @@ impl ValidationError {
             Self::RedundantRelationship { .. } => ValidationErrorCode::RedundantRelationship,
             Self::SuspectLink { .. } => ValidationErrorCode::SuspectLink,
             Self::UnreviewedItem { .. } => ValidationErrorCode::UnreviewedItem,
+            Self::DeprecatedField { .. } => ValidationErrorCode::DeprecatedField,
         }
     }
 }

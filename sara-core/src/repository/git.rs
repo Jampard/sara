@@ -171,7 +171,10 @@ impl GitReader {
             match entry.kind() {
                 Some(ObjectType::Blob) => {
                     // Check for Markdown extension
-                    if name.ends_with(".md") || name.ends_with(".markdown") {
+                    if name.ends_with(".md")
+                        || name.ends_with(".markdown")
+                        || name.ends_with(".mdx")
+                    {
                         files.push(path);
                     }
                 }

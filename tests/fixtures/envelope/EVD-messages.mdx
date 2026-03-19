@@ -1,0 +1,30 @@
+---
+id: "EVD-messages"
+type: evidence
+name: "Email Thread"
+sourcing: "forensic"
+participants:
+  - entity: "ITM-alice"
+    role: "sender"
+  - entity: "ITM-bob"
+    role: "recipient"
+  - entity: "ITM-carol"
+    role: "cc"
+messages:
+  - id: 1
+    from: "ITM-alice"
+    to:
+      - "ITM-bob"
+    date: "2024-01-15"
+    subject: "Meeting Request"
+    cc:
+      - "ITM-carol"
+  - id: 2
+    from: "ITM-bob"
+    to:
+      - "ITM-alice"
+    date: "2024-01-16"
+    subject: "Re: Meeting Request"
+---
+
+An email thread between Alice, Bob, and Carol.

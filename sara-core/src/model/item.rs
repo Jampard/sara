@@ -508,7 +508,7 @@ impl fmt::Display for ItemType {
 }
 
 /// Unique identifier for an item across all repositories.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ItemId(String);
 
@@ -827,6 +827,14 @@ pub enum ItemAttributes {
         sourcing: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         relation: Option<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        messages: Vec<EnvelopeMessage>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        deposition: Option<EnvelopeDeposition>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        flights: Vec<EnvelopeFlight>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        transactions: Vec<EnvelopeTransaction>,
     },
 
     #[serde(rename = "thesis")]
@@ -884,6 +892,10 @@ impl ItemAttributes {
             ItemType::Evidence => ItemAttributes::Evidence {
                 sourcing: None,
                 relation: None,
+                messages: Vec::new(),
+                deposition: None,
+                flights: Vec::new(),
+                transactions: Vec::new(),
             },
             ItemType::Thesis => ItemAttributes::Thesis,
             ItemType::Hypothesis => ItemAttributes::Hypothesis { assessment: None },
@@ -980,6 +992,79 @@ impl ItemAttributes {
             _ => None,
         }
     }
+
+    /// Returns the messages envelope if this is Evidence.
+    #[must_use]
+    pub fn messages(&self) -> &[EnvelopeMessage] {
+        match self {
+            Self::Evidence { messages, .. } => messages,
+            _ => &[],
+        }
+    }
+
+    /// Returns the deposition envelope if this is Evidence.
+    #[must_use]
+    pub fn deposition(&self) -> Option<&EnvelopeDeposition> {
+        match self {
+            Self::Evidence { deposition, .. } => deposition.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// Returns the flights envelope if this is Evidence.
+    #[must_use]
+    pub fn flights(&self) -> &[EnvelopeFlight] {
+        match self {
+            Self::Evidence { flights, .. } => flights,
+            _ => &[],
+        }
+    }
+
+    /// Returns the transactions envelope if this is Evidence.
+    #[must_use]
+    pub fn transactions(&self) -> &[EnvelopeTransaction] {
+        match self {
+            Self::Evidence { transactions, .. } => transactions,
+            _ => &[],
+        }
+    }
+
+    /// Collects all entity UIDs referenced in envelope data.
+    pub fn envelope_entity_ids(&self) -> Vec<&ItemId> {
+        let mut ids = Vec::new();
+        for msg in self.messages() {
+            ids.push(&msg.from);
+            ids.extend(&msg.to);
+            if let Some(cc) = &msg.cc {
+                ids.extend(cc);
+            }
+            if let Some(bcc) = &msg.bcc {
+                ids.extend(bcc);
+            }
+            if let Some(removed) = &msg.removed {
+                ids.extend(removed);
+            }
+        }
+        if let Some(depo) = self.deposition() {
+            ids.push(&depo.witness);
+            for ex in &depo.exchanges {
+                ids.push(&ex.speaker);
+            }
+        }
+        for flight in self.flights() {
+            ids.push(&flight.origin);
+            ids.push(&flight.destination);
+            if let Some(ref aircraft) = flight.aircraft {
+                ids.push(aircraft);
+            }
+            ids.extend(&flight.passengers);
+        }
+        for txn in self.transactions() {
+            ids.push(&txn.from);
+            ids.push(&txn.to);
+        }
+        ids
+    }
 }
 
 use crate::model::metadata::SourceLocation;
@@ -992,6 +1077,71 @@ use crate::model::metadata::SourceLocation;
 pub struct Participant {
     pub entity: ItemId,
     pub role: String,
+}
+
+/// A message in an evidence envelope (email, memo, etc.).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnvelopeMessage {
+    pub id: i64,
+    pub from: ItemId,
+    pub to: Vec<ItemId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cc: Option<Vec<ItemId>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bcc: Option<Vec<ItemId>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forward: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub removed: Option<Vec<ItemId>>,
+}
+
+/// A single Q&A exchange in a deposition.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepositionExchange {
+    pub id: i64,
+    pub speaker: ItemId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub objection: Option<bool>,
+}
+
+/// A deposition evidence envelope.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnvelopeDeposition {
+    pub witness: ItemId,
+    pub date: String,
+    pub proceeding: String,
+    pub exchanges: Vec<DepositionExchange>,
+}
+
+/// A flight record in an evidence envelope.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnvelopeFlight {
+    pub id: i64,
+    pub date: String,
+    pub origin: ItemId,
+    pub destination: ItemId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aircraft: Option<ItemId>,
+    pub passengers: Vec<ItemId>,
+}
+
+/// A financial transaction in an evidence envelope.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnvelopeTransaction {
+    pub id: i64,
+    pub date: String,
+    pub from: ItemId,
+    pub to: ItemId,
+    pub amount: f64,
+    pub currency: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub method: Option<String>,
 }
 
 /// Represents a single document/node in the knowledge graph.
@@ -1052,6 +1202,10 @@ pub struct Item {
     /// N-ary participant references with typed roles.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub participants: Vec<Participant>,
+
+    /// Raw YAML field keys present in the frontmatter (for deprecated field detection).
+    #[serde(skip)]
+    pub raw_field_keys: Vec<String>,
 }
 
 fn default_normative() -> bool {
@@ -1063,21 +1217,31 @@ fn is_true(v: &bool) -> bool {
 }
 
 impl Item {
-    /// Returns an iterator over all referenced item IDs (upstream, downstream, and peer).
+    /// Returns an iterator over all referenced item IDs (upstream, downstream, peer,
+    /// participant entities, and envelope entities).
     pub fn all_references(&self) -> impl Iterator<Item = &ItemId> {
         // Upstream and downstream references
         let upstream_downstream = self.upstream.all_ids().chain(self.downstream.all_ids());
 
         // Peer references from attributes (depends_on for requirements, supersedes for ADRs)
-        let peer_refs: Box<dyn Iterator<Item = &ItemId>> = match &self.attributes {
+        let peer_refs: Vec<&ItemId> = match &self.attributes {
             ItemAttributes::SystemRequirement { depends_on, .. }
             | ItemAttributes::SoftwareRequirement { depends_on, .. }
-            | ItemAttributes::HardwareRequirement { depends_on, .. } => Box::new(depends_on.iter()),
-            ItemAttributes::Adr { supersedes, .. } => Box::new(supersedes.iter()),
-            _ => Box::new(std::iter::empty()),
+            | ItemAttributes::HardwareRequirement { depends_on, .. } => depends_on.iter().collect(),
+            ItemAttributes::Adr { supersedes, .. } => supersedes.iter().collect(),
+            _ => Vec::new(),
         };
 
-        upstream_downstream.chain(peer_refs)
+        // Participant entity UIDs
+        let participant_refs: Vec<&ItemId> = self.participants.iter().map(|p| &p.entity).collect();
+
+        // Envelope entity UIDs (from messages, deposition, flights, transactions)
+        let envelope_refs = self.attributes.envelope_entity_ids();
+
+        upstream_downstream
+            .chain(peer_refs)
+            .chain(participant_refs)
+            .chain(envelope_refs)
     }
 }
 
@@ -1102,6 +1266,11 @@ pub struct ItemBuilder {
     sourcing: Option<String>,
     relation: Option<String>,
     assessment: Option<String>,
+    // Envelope fields (Evidence type)
+    envelope_messages: Vec<EnvelopeMessage>,
+    envelope_deposition: Option<EnvelopeDeposition>,
+    envelope_flights: Vec<EnvelopeFlight>,
+    envelope_transactions: Vec<EnvelopeTransaction>,
     // Fingerprint/review fields
     outcome: Option<String>,
     reviewed: Option<String>,
@@ -1110,6 +1279,7 @@ pub struct ItemBuilder {
     derived: bool,
     normative: Option<bool>,
     participants: Vec<Participant>,
+    raw_field_keys: Vec<String>,
 }
 
 impl ItemBuilder {
@@ -1226,6 +1396,30 @@ impl ItemBuilder {
         self
     }
 
+    /// Sets the envelope messages (for Evidence).
+    pub fn envelope_messages(mut self, messages: Vec<EnvelopeMessage>) -> Self {
+        self.envelope_messages = messages;
+        self
+    }
+
+    /// Sets the envelope deposition (for Evidence).
+    pub fn envelope_deposition(mut self, deposition: EnvelopeDeposition) -> Self {
+        self.envelope_deposition = Some(deposition);
+        self
+    }
+
+    /// Sets the envelope flights (for Evidence).
+    pub fn envelope_flights(mut self, flights: Vec<EnvelopeFlight>) -> Self {
+        self.envelope_flights = flights;
+        self
+    }
+
+    /// Sets the envelope transactions (for Evidence).
+    pub fn envelope_transactions(mut self, transactions: Vec<EnvelopeTransaction>) -> Self {
+        self.envelope_transactions = transactions;
+        self
+    }
+
     /// Sets the outcome lifecycle state.
     pub fn outcome(mut self, outcome: String) -> Self {
         self.outcome = Some(outcome);
@@ -1265,6 +1459,12 @@ impl ItemBuilder {
         self
     }
 
+    /// Sets the raw YAML field keys (for deprecated field detection).
+    pub fn raw_field_keys(mut self, keys: Vec<String>) -> Self {
+        self.raw_field_keys = keys;
+        self
+    }
+
     /// Sets the attributes directly.
     pub fn attributes(mut self, attrs: ItemAttributes) -> Self {
         // Extract values from the attributes enum
@@ -1279,9 +1479,20 @@ impl ItemBuilder {
             | ItemAttributes::Premise
             | ItemAttributes::Question
             | ItemAttributes::Block => {}
-            ItemAttributes::Evidence { sourcing, relation } => {
+            ItemAttributes::Evidence {
+                sourcing,
+                relation,
+                messages,
+                deposition,
+                flights,
+                transactions,
+            } => {
                 self.sourcing = sourcing;
                 self.relation = relation;
+                self.envelope_messages = messages;
+                self.envelope_deposition = deposition;
+                self.envelope_flights = flights;
+                self.envelope_transactions = transactions;
             }
             ItemAttributes::Hypothesis { assessment } | ItemAttributes::Analysis { assessment } => {
                 self.assessment = assessment;
@@ -1390,6 +1601,10 @@ impl ItemBuilder {
             ItemType::Evidence => Ok(ItemAttributes::Evidence {
                 sourcing: self.sourcing.clone(),
                 relation: self.relation.clone(),
+                messages: self.envelope_messages.clone(),
+                deposition: self.envelope_deposition.clone(),
+                flights: self.envelope_flights.clone(),
+                transactions: self.envelope_transactions.clone(),
             }),
             ItemType::Thesis => Ok(ItemAttributes::Thesis),
             ItemType::Hypothesis => Ok(ItemAttributes::Hypothesis {
@@ -1468,6 +1683,7 @@ impl ItemBuilder {
             derived: self.derived,
             normative: self.normative.unwrap_or(true),
             participants: self.participants,
+            raw_field_keys: self.raw_field_keys,
         })
     }
 }
@@ -1798,6 +2014,10 @@ mod tests {
         let attrs = ItemAttributes::Evidence {
             sourcing: Some("C".to_string()),
             relation: Some("hosted".to_string()),
+            messages: Vec::new(),
+            deposition: None,
+            flights: Vec::new(),
+            transactions: Vec::new(),
         };
         assert_eq!(attrs.sourcing(), Some("C"));
         assert_eq!(attrs.evidence_relation(), Some("hosted"));
@@ -1817,5 +2037,116 @@ mod tests {
             assessment: Some("roughly-even".to_string()),
         };
         assert_eq!(attrs.assessment(), Some("roughly-even"));
+    }
+
+    #[test]
+    fn test_envelope_entity_ids_collects_all_refs() {
+        let attrs = ItemAttributes::Evidence {
+            sourcing: None,
+            relation: None,
+            messages: vec![EnvelopeMessage {
+                id: 1,
+                from: ItemId::new_unchecked("ITM-alice"),
+                to: vec![ItemId::new_unchecked("ITM-bob")],
+                date: None,
+                subject: None,
+                cc: Some(vec![ItemId::new_unchecked("ITM-carol")]),
+                bcc: Some(vec![ItemId::new_unchecked("ITM-dave")]),
+                forward: None,
+                removed: Some(vec![ItemId::new_unchecked("ITM-eve")]),
+            }],
+            deposition: Some(EnvelopeDeposition {
+                witness: ItemId::new_unchecked("ITM-witness"),
+                date: "2024-01-01".into(),
+                proceeding: "Case".into(),
+                exchanges: vec![DepositionExchange {
+                    id: 1,
+                    speaker: ItemId::new_unchecked("ITM-speaker"),
+                    page: None,
+                    objection: None,
+                }],
+            }),
+            flights: vec![EnvelopeFlight {
+                id: 1,
+                date: "2024-01-01".into(),
+                origin: ItemId::new_unchecked("ITM-origin"),
+                destination: ItemId::new_unchecked("ITM-dest"),
+                aircraft: Some(ItemId::new_unchecked("ITM-aircraft")),
+                passengers: vec![ItemId::new_unchecked("ITM-pax")],
+            }],
+            transactions: vec![EnvelopeTransaction {
+                id: 1,
+                date: "2024-01-01".into(),
+                from: ItemId::new_unchecked("ITM-payer"),
+                to: ItemId::new_unchecked("ITM-payee"),
+                amount: 100.0,
+                currency: "USD".into(),
+                method: None,
+            }],
+        };
+
+        let ids: Vec<&str> = attrs
+            .envelope_entity_ids()
+            .iter()
+            .map(|id| id.as_str())
+            .collect();
+        // Messages: from, to, cc, bcc, removed = 5
+        assert!(ids.contains(&"ITM-alice"));
+        assert!(ids.contains(&"ITM-bob"));
+        assert!(ids.contains(&"ITM-carol"));
+        assert!(ids.contains(&"ITM-dave"));
+        assert!(ids.contains(&"ITM-eve"));
+        // Deposition: witness, speaker = 2
+        assert!(ids.contains(&"ITM-witness"));
+        assert!(ids.contains(&"ITM-speaker"));
+        // Flights: origin, destination, aircraft, passenger = 4
+        assert!(ids.contains(&"ITM-origin"));
+        assert!(ids.contains(&"ITM-dest"));
+        assert!(ids.contains(&"ITM-aircraft"));
+        assert!(ids.contains(&"ITM-pax"));
+        // Transactions: from, to = 2
+        assert!(ids.contains(&"ITM-payer"));
+        assert!(ids.contains(&"ITM-payee"));
+        // Total: 13
+        assert_eq!(ids.len(), 13);
+    }
+
+    #[test]
+    fn test_all_references_includes_envelope_and_participants() {
+        let source = SourceLocation::new(PathBuf::from("/test"), "EVD-001.md".to_string());
+        let item = ItemBuilder::new()
+            .id(ItemId::new_unchecked("EVD-001"))
+            .item_type(ItemType::Evidence)
+            .name("Test")
+            .source(source)
+            .upstream(UpstreamRefs {
+                parent: vec![ItemId::new_unchecked("ITM-parent")],
+                ..Default::default()
+            })
+            .participants(vec![Participant {
+                entity: ItemId::new_unchecked("ITM-alice"),
+                role: "sender".into(),
+            }])
+            .envelope_messages(vec![EnvelopeMessage {
+                id: 1,
+                from: ItemId::new_unchecked("ITM-alice"),
+                to: vec![ItemId::new_unchecked("ITM-bob")],
+                date: None,
+                subject: None,
+                cc: None,
+                bcc: None,
+                forward: None,
+                removed: None,
+            }])
+            .build()
+            .unwrap();
+
+        let all_refs: Vec<&str> = item.all_references().map(|id| id.as_str()).collect();
+        // Upstream: ITM-parent
+        assert!(all_refs.contains(&"ITM-parent"));
+        // Participant: ITM-alice
+        assert!(all_refs.contains(&"ITM-alice"));
+        // Envelope: ITM-alice (from), ITM-bob (to)
+        assert!(all_refs.contains(&"ITM-bob"));
     }
 }

@@ -343,6 +343,47 @@ impl KnowledgeGraphBuilder {
                 RelationshipType::ParticipantOf,
             );
         }
+
+        // Entity-entity edges from evidence envelopes
+        if item.item_type == ItemType::Evidence {
+            // Messages: from → each to (deduplicated per entity pair)
+            let mut seen_comm = std::collections::HashSet::new();
+            for msg in item.attributes.messages() {
+                for to_id in &msg.to {
+                    if seen_comm.insert((&msg.from, to_id)) {
+                        graph.add_relationship(
+                            &msg.from,
+                            to_id,
+                            RelationshipType::CommunicatedWith,
+                        );
+                        graph.add_relationship(
+                            to_id,
+                            &msg.from,
+                            RelationshipType::ReceivedCommunicationFrom,
+                        );
+                    }
+                }
+            }
+            // Flights: passenger co-occurrence (deduplicated)
+            let mut seen_travel = std::collections::HashSet::new();
+            for flight in item.attributes.flights() {
+                for i in 0..flight.passengers.len() {
+                    for j in (i + 1)..flight.passengers.len() {
+                        let (a, b) = (&flight.passengers[i], &flight.passengers[j]);
+                        let key = if a < b { (a, b) } else { (b, a) };
+                        if seen_travel.insert(key) {
+                            graph.add_relationship(a, b, RelationshipType::TraveledWith);
+                            graph.add_relationship(b, a, RelationshipType::TraveledWith);
+                        }
+                    }
+                }
+            }
+            // Transactions: from → to
+            for txn in item.attributes.transactions() {
+                graph.add_relationship(&txn.from, &txn.to, RelationshipType::PaidTo);
+                graph.add_relationship(&txn.to, &txn.from, RelationshipType::ReceivedPaymentFrom);
+            }
+        }
     }
 }
 
@@ -577,5 +618,236 @@ mod tests {
         //   BLK-001→EVD-001 (affects)       = 2
         // Total: 12 * 2 = 24 edges
         assert_eq!(graph.relationship_count(), 24);
+    }
+
+    #[test]
+    fn test_envelope_message_edges() {
+        use crate::model::{EnvelopeMessage, ItemBuilder, Participant};
+
+        // Evidence with two messages: Alice→Bob, Bob→Alice
+        // Should create CommunicatedWith + ReceivedCommunicationFrom edges,
+        // deduplicated per directed entity pair.
+        let entity_a = create_test_item("ITM-alice", ItemType::Entity);
+        let entity_b = create_test_item("ITM-bob", ItemType::Entity);
+        let evidence = ItemBuilder::new()
+            .id(ItemId::new_unchecked("EVD-001"))
+            .item_type(ItemType::Evidence)
+            .name("Emails")
+            .source(crate::model::SourceLocation::new(
+                std::path::PathBuf::from("/test"),
+                "EVD-001.md",
+            ))
+            .participants(vec![
+                Participant {
+                    entity: ItemId::new_unchecked("ITM-alice"),
+                    role: "sender".into(),
+                },
+                Participant {
+                    entity: ItemId::new_unchecked("ITM-bob"),
+                    role: "recipient".into(),
+                },
+            ])
+            .envelope_messages(vec![
+                EnvelopeMessage {
+                    id: 1,
+                    from: ItemId::new_unchecked("ITM-alice"),
+                    to: vec![ItemId::new_unchecked("ITM-bob")],
+                    date: None,
+                    subject: None,
+                    cc: None,
+                    bcc: None,
+                    forward: None,
+                    removed: None,
+                },
+                // Second message same pair — should NOT create duplicate edges
+                EnvelopeMessage {
+                    id: 2,
+                    from: ItemId::new_unchecked("ITM-alice"),
+                    to: vec![ItemId::new_unchecked("ITM-bob")],
+                    date: None,
+                    subject: None,
+                    cc: None,
+                    bcc: None,
+                    forward: None,
+                    removed: None,
+                },
+                // Reverse direction — distinct pair, should create new edges
+                EnvelopeMessage {
+                    id: 3,
+                    from: ItemId::new_unchecked("ITM-bob"),
+                    to: vec![ItemId::new_unchecked("ITM-alice")],
+                    date: None,
+                    subject: None,
+                    cc: None,
+                    bcc: None,
+                    forward: None,
+                    removed: None,
+                },
+            ])
+            .build()
+            .unwrap();
+
+        let graph = KnowledgeGraphBuilder::new()
+            .add_item(entity_a)
+            .add_item(entity_b)
+            .add_item(evidence)
+            .build()
+            .unwrap();
+
+        // Participant edges: 2 participants × 2 (bidirectional) = 4
+        // Message edges:
+        //   Alice→Bob (CommunicatedWith) + Bob→Alice (ReceivedCommunicationFrom) = 2
+        //   Bob→Alice (CommunicatedWith) + Alice→Bob (ReceivedCommunicationFrom) = 2
+        //   (second Alice→Bob message is deduplicated)
+        // Total: 4 + 4 = 8
+        assert_eq!(graph.relationship_count(), 8);
+
+        // Verify the edge types exist
+        let inner = graph.inner();
+        let alice_idx = graph
+            .node_index(&ItemId::new_unchecked("ITM-alice"))
+            .unwrap();
+        let bob_idx = graph.node_index(&ItemId::new_unchecked("ITM-bob")).unwrap();
+
+        let alice_to_bob: Vec<_> = inner
+            .edges_connecting(alice_idx, bob_idx)
+            .map(|e| *e.weight())
+            .collect();
+        assert!(
+            alice_to_bob.contains(&RelationshipType::CommunicatedWith),
+            "Expected CommunicatedWith edge Alice→Bob"
+        );
+    }
+
+    #[test]
+    fn test_envelope_flight_edges() {
+        use crate::model::{EnvelopeFlight, ItemBuilder, Participant};
+
+        // Flight with 3 passengers → should create TraveledWith for all pairs
+        let entity_a = create_test_item("ITM-a", ItemType::Entity);
+        let entity_b = create_test_item("ITM-b", ItemType::Entity);
+        let entity_c = create_test_item("ITM-c", ItemType::Entity);
+        let loc = create_test_item("ITM-loc", ItemType::Entity);
+
+        let evidence = ItemBuilder::new()
+            .id(ItemId::new_unchecked("EVD-001"))
+            .item_type(ItemType::Evidence)
+            .name("Flights")
+            .source(crate::model::SourceLocation::new(
+                std::path::PathBuf::from("/test"),
+                "EVD-001.md",
+            ))
+            .participants(vec![
+                Participant {
+                    entity: ItemId::new_unchecked("ITM-a"),
+                    role: "passenger".into(),
+                },
+                Participant {
+                    entity: ItemId::new_unchecked("ITM-b"),
+                    role: "passenger".into(),
+                },
+                Participant {
+                    entity: ItemId::new_unchecked("ITM-c"),
+                    role: "passenger".into(),
+                },
+                Participant {
+                    entity: ItemId::new_unchecked("ITM-loc"),
+                    role: "location".into(),
+                },
+            ])
+            .envelope_flights(vec![EnvelopeFlight {
+                id: 1,
+                date: "2024-01-01".into(),
+                origin: ItemId::new_unchecked("ITM-loc"),
+                destination: ItemId::new_unchecked("ITM-loc"),
+                aircraft: None,
+                passengers: vec![
+                    ItemId::new_unchecked("ITM-a"),
+                    ItemId::new_unchecked("ITM-b"),
+                    ItemId::new_unchecked("ITM-c"),
+                ],
+            }])
+            .build()
+            .unwrap();
+
+        let graph = KnowledgeGraphBuilder::new()
+            .add_item(entity_a)
+            .add_item(entity_b)
+            .add_item(entity_c)
+            .add_item(loc)
+            .add_item(evidence)
+            .build()
+            .unwrap();
+
+        // Participant edges: 4 participants × 2 = 8
+        // Flight co-occurrence: 3 pairs (a-b, a-c, b-c) × 2 (symmetric) = 6
+        // Total: 8 + 6 = 14
+        assert_eq!(graph.relationship_count(), 14);
+    }
+
+    #[test]
+    fn test_envelope_transaction_edges() {
+        use crate::model::{EnvelopeTransaction, ItemBuilder, Participant};
+
+        let entity_a = create_test_item("ITM-a", ItemType::Entity);
+        let entity_b = create_test_item("ITM-b", ItemType::Entity);
+
+        let evidence = ItemBuilder::new()
+            .id(ItemId::new_unchecked("EVD-001"))
+            .item_type(ItemType::Evidence)
+            .name("Transactions")
+            .source(crate::model::SourceLocation::new(
+                std::path::PathBuf::from("/test"),
+                "EVD-001.md",
+            ))
+            .participants(vec![
+                Participant {
+                    entity: ItemId::new_unchecked("ITM-a"),
+                    role: "payer".into(),
+                },
+                Participant {
+                    entity: ItemId::new_unchecked("ITM-b"),
+                    role: "payee".into(),
+                },
+            ])
+            .envelope_transactions(vec![EnvelopeTransaction {
+                id: 1,
+                date: "2024-01-01".into(),
+                from: ItemId::new_unchecked("ITM-a"),
+                to: ItemId::new_unchecked("ITM-b"),
+                amount: 1000.0,
+                currency: "USD".into(),
+                method: None,
+            }])
+            .build()
+            .unwrap();
+
+        let graph = KnowledgeGraphBuilder::new()
+            .add_item(entity_a)
+            .add_item(entity_b)
+            .add_item(evidence)
+            .build()
+            .unwrap();
+
+        // Participant edges: 2 × 2 = 4
+        // Transaction edges: PaidTo + ReceivedPaymentFrom = 2
+        // Total: 6
+        assert_eq!(graph.relationship_count(), 6);
+
+        let inner = graph.inner();
+        let a_idx = graph.node_index(&ItemId::new_unchecked("ITM-a")).unwrap();
+        let b_idx = graph.node_index(&ItemId::new_unchecked("ITM-b")).unwrap();
+
+        let a_to_b: Vec<_> = inner
+            .edges_connecting(a_idx, b_idx)
+            .map(|e| *e.weight())
+            .collect();
+        assert!(a_to_b.contains(&RelationshipType::PaidTo));
+
+        let b_to_a: Vec<_> = inner
+            .edges_connecting(b_idx, a_idx)
+            .map(|e| *e.weight())
+            .collect();
+        assert!(b_to_a.contains(&RelationshipType::ReceivedPaymentFrom));
     }
 }

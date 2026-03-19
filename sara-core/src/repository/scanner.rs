@@ -37,7 +37,7 @@ fn scan_directory_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), 
         } else if path.is_file() {
             // Check for Markdown extension
             if let Some(ext) = path.extension()
-                && (ext == "md" || ext == "markdown")
+                && (ext == "md" || ext == "markdown" || ext == "mdx")
             {
                 files.push(path);
             }
@@ -182,11 +182,10 @@ mod tests {
         if fixtures_path.exists() {
             let files = scan_directory(&fixtures_path).unwrap();
             assert!(!files.is_empty(), "Should find fixture files");
-            assert!(
-                files
-                    .iter()
-                    .all(|f| f.extension().is_some_and(|e| e == "md"))
-            );
+            assert!(files.iter().all(|f| {
+                f.extension()
+                    .is_some_and(|e| e == "md" || e == "mdx" || e == "markdown")
+            }));
         }
     }
 }

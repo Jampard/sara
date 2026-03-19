@@ -80,6 +80,17 @@ pub enum RelationshipType {
     Participant,
     /// Inverse of Participant.
     ParticipantOf,
+
+    /// Entity communicated with entity (from messages envelope).
+    CommunicatedWith,
+    /// Inverse of CommunicatedWith.
+    ReceivedCommunicationFrom,
+    /// Entities traveled together (symmetric, from flights envelope).
+    TraveledWith,
+    /// Entity paid entity (from transactions envelope).
+    PaidTo,
+    /// Inverse of PaidTo.
+    ReceivedPaymentFrom,
 }
 
 impl RelationshipType {
@@ -121,6 +132,11 @@ impl RelationshipType {
             Self::AnalysisOf => Self::InvestigationAnalyses,
             Self::Participant => Self::ParticipantOf,
             Self::ParticipantOf => Self::Participant,
+            Self::CommunicatedWith => Self::ReceivedCommunicationFrom,
+            Self::ReceivedCommunicationFrom => Self::CommunicatedWith,
+            Self::TraveledWith => Self::TraveledWith,
+            Self::PaidTo => Self::ReceivedPaymentFrom,
+            Self::ReceivedPaymentFrom => Self::PaidTo,
         }
     }
 
@@ -180,6 +196,11 @@ impl RelationshipType {
                 | Self::IsSupersededBy
                 | Self::Affects
                 | Self::AffectedBy
+                | Self::CommunicatedWith
+                | Self::ReceivedCommunicationFrom
+                | Self::TraveledWith
+                | Self::PaidTo
+                | Self::ReceivedPaymentFrom
         )
     }
 
@@ -212,6 +233,9 @@ impl RelationshipType {
                 | Self::InvestigationAnalyses
                 | Self::Affects
                 | Self::Participant
+                | Self::CommunicatedWith
+                | Self::TraveledWith
+                | Self::PaidTo
         )
     }
 
@@ -253,6 +277,11 @@ impl RelationshipType {
             Self::AnalysisOf => FieldName::AnalysisOf,
             Self::Participant => FieldName::Participants,
             Self::ParticipantOf => FieldName::ParticipantOf,
+            Self::CommunicatedWith => FieldName::CommunicatedWith,
+            Self::ReceivedCommunicationFrom => FieldName::ReceivedCommunicationFrom,
+            Self::TraveledWith => FieldName::TraveledWith,
+            Self::PaidTo => FieldName::PaidTo,
+            Self::ReceivedPaymentFrom => FieldName::ReceivedPaymentFrom,
         }
     }
 }
@@ -595,6 +624,14 @@ impl RelationshipRules {
             // Participant is permissive: any item can reference an Entity
             RelationshipType::Participant => matches!(to_type, ItemType::Entity),
             RelationshipType::ParticipantOf => matches!(from_type, ItemType::Entity),
+            // Entity-entity envelope-derived relationships
+            RelationshipType::CommunicatedWith
+            | RelationshipType::ReceivedCommunicationFrom
+            | RelationshipType::TraveledWith
+            | RelationshipType::PaidTo
+            | RelationshipType::ReceivedPaymentFrom => {
+                matches!(from_type, ItemType::Entity) && matches!(to_type, ItemType::Entity)
+            }
         }
     }
 }
@@ -917,5 +954,71 @@ mod tests {
         let (rel, targets) = RelationshipRules::valid_upstream_for(ItemType::Premise).unwrap();
         assert_eq!(rel, RelationshipType::EstablishedBy);
         assert!(targets.contains(&ItemType::Thesis));
+    }
+
+    #[test]
+    fn test_envelope_relationship_types_are_peer() {
+        assert!(RelationshipType::CommunicatedWith.is_peer());
+        assert!(RelationshipType::ReceivedCommunicationFrom.is_peer());
+        assert!(RelationshipType::TraveledWith.is_peer());
+        assert!(RelationshipType::PaidTo.is_peer());
+        assert!(RelationshipType::ReceivedPaymentFrom.is_peer());
+    }
+
+    #[test]
+    fn test_envelope_relationship_inverses() {
+        assert_eq!(
+            RelationshipType::CommunicatedWith.inverse(),
+            RelationshipType::ReceivedCommunicationFrom
+        );
+        assert_eq!(
+            RelationshipType::ReceivedCommunicationFrom.inverse(),
+            RelationshipType::CommunicatedWith
+        );
+        assert_eq!(
+            RelationshipType::TraveledWith.inverse(),
+            RelationshipType::TraveledWith,
+            "TraveledWith should be self-inverse (symmetric)"
+        );
+        assert_eq!(
+            RelationshipType::PaidTo.inverse(),
+            RelationshipType::ReceivedPaymentFrom
+        );
+        assert_eq!(
+            RelationshipType::ReceivedPaymentFrom.inverse(),
+            RelationshipType::PaidTo
+        );
+    }
+
+    #[test]
+    fn test_envelope_relationship_validity() {
+        // Entity → Entity: valid for all envelope types
+        assert!(RelationshipRules::is_valid_relationship(
+            ItemType::Entity,
+            ItemType::Entity,
+            RelationshipType::CommunicatedWith,
+        ));
+        assert!(RelationshipRules::is_valid_relationship(
+            ItemType::Entity,
+            ItemType::Entity,
+            RelationshipType::TraveledWith,
+        ));
+        assert!(RelationshipRules::is_valid_relationship(
+            ItemType::Entity,
+            ItemType::Entity,
+            RelationshipType::PaidTo,
+        ));
+
+        // Non-entity: invalid
+        assert!(!RelationshipRules::is_valid_relationship(
+            ItemType::Evidence,
+            ItemType::Entity,
+            RelationshipType::CommunicatedWith,
+        ));
+        assert!(!RelationshipRules::is_valid_relationship(
+            ItemType::Entity,
+            ItemType::Evidence,
+            RelationshipType::TraveledWith,
+        ));
     }
 }

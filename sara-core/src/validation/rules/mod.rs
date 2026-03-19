@@ -5,7 +5,9 @@
 
 mod broken_refs;
 mod cycles;
+mod deprecated;
 mod duplicates;
+mod envelope;
 mod metadata;
 mod orphans;
 mod redundant;
@@ -16,7 +18,9 @@ mod unreviewed;
 // Export rule structs for the validator
 pub use broken_refs::BrokenReferencesRule;
 pub use cycles::CyclesRule;
+pub use deprecated::DeprecatedFieldsRule;
 pub use duplicates::DuplicatesRule;
+pub use envelope::EnvelopeRule;
 pub use metadata::MetadataRule;
 pub use orphans::OrphansRule;
 pub use redundant::RedundantRelationshipsRule;

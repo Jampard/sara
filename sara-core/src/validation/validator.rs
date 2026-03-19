@@ -8,8 +8,9 @@ use crate::model::Item;
 use crate::validation::report::{ValidationReport, ValidationReportBuilder};
 use crate::validation::rule::{Severity, ValidationRule};
 use crate::validation::rules::{
-    BrokenReferencesRule, CyclesRule, DuplicatesRule, MetadataRule, OrphansRule,
-    RedundantRelationshipsRule, RelationshipsRule, SuspectLinksRule, UnreviewedItemsRule,
+    BrokenReferencesRule, CyclesRule, DeprecatedFieldsRule, DuplicatesRule, EnvelopeRule,
+    MetadataRule, OrphansRule, RedundantRelationshipsRule, RelationshipsRule, SuspectLinksRule,
+    UnreviewedItemsRule,
 };
 
 /// All validation rules.
@@ -23,6 +24,8 @@ static RULES: &[&dyn ValidationRule] = &[
     &OrphansRule,
     &SuspectLinksRule,
     &UnreviewedItemsRule,
+    &EnvelopeRule,
+    &DeprecatedFieldsRule,
 ];
 
 /// Orchestrates all validation rules.
